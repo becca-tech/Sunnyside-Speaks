@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sunnyside Speaks — Community Mapping</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#1F3547;
+    --charcoal:#2B2620;
+    --cream:#F6F2EA;
+    --paper:#FFFDF8;
+    --line:#E2DBCB;
+    --brick:#A23E2E;
+    --sage:#5F7F5C;
+    --amber:#B3821E;
+    --plum:#734A64;
+    --teal:#2B6870;
+    --slate:#5B6670;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background:var(--cream);
+    color:var(--charcoal);
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  .display-font{ font-family:'Fraunces', Georgia, serif; }
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--cream);
+    border-bottom:1px solid var(--line);
+    padding:20px 28px 16px;
+    flex-shrink:0;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .eyebrow{ text-transform:uppercase; letter-spacing:0.14em; font-size:11px; font-weight:700; color:var(--brick); margin:0 0 6px; }
+  h1{ margin:0; font-size:clamp(28px, 4vw, 38px); font-weight:700; color:var(--ink); line-height:1.05; }
+  .tagline{ margin:8px 0 0; font-size:16px; font-style:italic; color:#4A443C; max-width:640px; }
+  .header-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .add-note-btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--brick); color:#fff; border:none; cursor:pointer;
+    font-family:inherit; font-size:14px; font-weight:700; padding:12px 20px; border-radius:999px;
+    white-space:nowrap; box-shadow:0 6px 16px rgba(162,62,45,.35);
+    transition:transform .12s ease;
+  }
+  .add-note-btn:hover{ transform:translateY(-1px); }
+  .add-note-btn.active{ background:var(--ink); }
+  .survey-link{ font-size:12px; color:#847c6e; text-decoration:none; }
+  .survey-link:hover{ color:var(--ink); text-decoration:underline; }
+
+  /* ---------- Status / instruction banner ---------- */
+  .status-banner{
+    background:#FBEFE0; border-bottom:1px solid #E8C990; color:#6B4F1D;
+    font-size:13px; line-height:1.5; padding:12px 28px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-shrink:0;
+  }
+  .status-banner.error{ background:#FAE4E0; border-color:#E0AFA6; color:#7A2E20; }
+  .status-banner.placing{ background:#FDECEA; border-color:var(--brick); color:#7A2E20; font-weight:600; }
+  .status-banner .cancel-place{ background:none; border:none; color:#7A2E20; font-weight:700; text-decoration:underline; cursor:pointer; font-size:13px; }
+  .spinner{
+    width:14px; height:14px; border-radius:50%;
+    border:2px solid rgba(107,79,29,.3); border-top-color:#6B4F1D;
+    animation:spin .8s linear infinite; flex-shrink:0;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* ---------- Control bar ---------- */
+  .control-bar{
+    background:var(--paper); border-bottom:1px solid var(--line);
+    padding:16px 28px; flex-shrink:0;
+  }
+  .steps{ font-size:13px; font-weight:600; color:var(--ink); margin:0 0 12px; letter-spacing:0.01em; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .steps span.faint{ color:#8b8478; font-weight:500; }
+  .clear-filters{ font-size:12px; font-weight:700; color:var(--brick); background:none; border:none; cursor:pointer; padding:0; text-decoration:underline; }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:10px; }
+  .chip{
+    display:flex; align-items:center; gap:8px; padding:8px 14px 8px 10px;
+    border-radius:999px; border:1.5px solid var(--line); background:var(--paper);
+    cursor:pointer; font-size:13.5px; font-weight:600; color:var(--charcoal);
+    transition:transform .12s ease, box-shadow .12s ease; user-select:none;
+  }
+  .chip:hover{ transform:translateY(-1px); }
+  .chip .dot{ width:11px; height:11px; border-radius:50%; flex-shrink:0; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6); }
+  .chip .count{ font-size:11px; font-weight:700; background:var(--cream); color:#6b6357; padding:1px 7px; border-radius:999px; }
+  .chip.active{ color:#fff; border-color:transparent; box-shadow:0 3px 10px rgba(0,0,0,.18); }
+  .chip.active .count{ background:rgba(255,255,255,.28); color:#fff; }
+  .chip.active .dot{ box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.9); }
+
+  .view-toggle{ display:flex; border:1.5px solid var(--line); border-radius:999px; padding:3px; background:var(--paper); flex-shrink:0; }
+  .view-btn{
+    border:none; background:none; cursor:pointer; font-family:inherit;
+    font-size:12.5px; font-weight:700; color:var(--charcoal); padding:6px 14px; border-radius:999px;
+  }
+  .view-btn.active{ background:var(--ink); color:#fff; }
+
+  /* ---------- Main layout ---------- */
+  .layout{ flex:1; display:flex; min-height:0; }
+  #map{ flex:2 1 0; min-width:0; min-height:420px; background:#E8E4DA; }
+  #map.placing{ cursor:crosshair; }
+  .sidebar{
+    flex:1 1 0; max-width:380px; min-width:290px;
+    background:var(--paper); border-left:1px solid var(--line);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .sidebar-head{ padding:18px 20px 12px; border-bottom:1px solid var(--line); flex-shrink:0; }
+  .sidebar-head h2{ margin:0 0 4px; font-size:19px; color:var(--ink); }
+  .sidebar-head p{ margin:0; font-size:12.5px; color:#847c6e; }
+  .refresh-btn{ background:none; border:1px solid var(--line); color:var(--ink); font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:999px; cursor:pointer; margin-top:8px; }
+  .refresh-btn:hover{ background:var(--cream); }
+  .refresh-btn[disabled]{ opacity:.5; cursor:default; }
+
+  .feed{ flex:1; overflow-y:auto; padding:8px 14px 20px; }
+  .empty-state{ text-align:center; padding:40px 14px; color:#8b8478; font-size:14px; line-height:1.6; }
+  .feed-item{ padding:12px 10px; border-bottom:1px solid var(--line); cursor:pointer; transition:background .12s ease; }
+  .feed-item:hover{ background:var(--cream); }
+  .feed-item-top{ display:flex; align-items:center; gap:6px; margin-bottom:5px; flex-wrap:wrap; }
+  .feed-cat{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:999px; color:#fff; }
+  .feed-source{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:2px 6px; border-radius:5px; color:#847c6e; background:var(--cream); border:1px solid var(--line); }
+  .feed-time{ margin-left:auto; font-size:11px; color:#a49c8d; }
+  .feed-role{ font-size:12.5px; color:#6b6357; margin:0; }
+  .feed-comment{ font-size:13px; color:var(--charcoal); margin:4px 0 0; line-height:1.4; }
+  .feed-location{ font-size:12px; font-weight:700; color:var(--ink); margin:4px 0 0; }
+
+  /* ---------- Footer ---------- */
+  footer{
+    flex-shrink:0; background:var(--ink); color:#cfd8de; font-size:12px;
+    padding:10px 28px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
+  }
+  footer a{ color:#cfd8de; }
+
+  /* ---------- Compose modal ---------- */
+  .scrim{ position:fixed; inset:0; background:rgba(31,53,71,.5); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
+  .modal{
+    background:var(--paper); width:100%; max-width:420px; border-radius:14px;
+    padding:22px 22px 18px; box-shadow:0 20px 50px rgba(0,0,0,.3); border-top:6px solid var(--brick);
+  }
+  .modal h3{ margin:0 0 4px; font-size:19px; color:var(--ink); }
+  .modal p.hint{ margin:0 0 14px; font-size:13px; color:#847c6e; }
+  .modal label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink); margin:0 0 6px; }
+  .cat-picker{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .cat-option{
+    display:flex; align-items:center; gap:6px; padding:7px 12px 7px 9px; border-radius:999px;
+    border:1.5px solid var(--line); background:var(--paper); cursor:pointer; font-size:12.5px; font-weight:600;
+  }
+  .cat-option .dot{ width:10px; height:10px; border-radius:50%; }
+  .cat-option.selected{ color:#fff; border-color:transparent; box-shadow:0 3px 10px rgba(0,0,0,.18); }
+  .modal textarea, .modal input[type=text]{
+    width:100%; border:1.5px solid var(--line); border-radius:8px; padding:9px 11px;
+    font-family:inherit; font-size:14px; resize:vertical; margin-bottom:14px; background:var(--cream);
+  }
+  .modal textarea:focus, .modal input:focus{ outline:2px solid var(--ink); outline-offset:1px; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; }
+  .btn{ border:none; border-radius:8px; padding:9px 16px; font-size:13.5px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .btn-ghost{ background:transparent; color:var(--ink); }
+  .btn-ghost:hover{ background:var(--cream); }
+  .btn-primary{ background:var(--brick); color:#fff; }
+  .btn-primary:hover{ opacity:.9; }
+  .btn-primary:disabled{ background:#d9c3bd; cursor:not-allowed; }
+  .char-count{ font-size:11px; color:#a49c8d; margin:-10px 0 14px; text-align:right; }
+
+  /* ---------- Leaflet overrides ---------- */
+  .leaflet-control-zoom{ border:none !important; box-shadow:0 6px 20px rgba(31,53,71,.18) !important; margin:0 14px 14px 0 !important; }
+  .leaflet-control-zoom a{ background:var(--paper) !important; color:var(--ink) !important; border:1px solid var(--line) !important; width:34px !important; height:34px !important; line-height:34px !important; font-size:17px !important; }
+  .leaflet-control-zoom a:first-child{ border-radius:10px 10px 0 0 !important; }
+  .leaflet-control-zoom a:last-child{ border-radius:0 0 10px 10px !important; }
+  .leaflet-control-attribution{ background:rgba(255,253,248,.85) !important; font-size:10.5px !important; }
+
+  .pin-marker{ width:16px; height:16px; border-radius:50%; border:2.5px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.4); transition:transform .15s ease; }
+  .pin-marker:hover{ transform:scale(1.3); }
+
+  .sticky-marker{
+    width:20px; height:20px; border:1px solid rgba(0,0,0,.15);
+    box-shadow:1px 3px 7px rgba(0,0,0,.4); position:relative;
+    transition:transform .15s ease;
+  }
+  .sticky-marker:hover{ transform:scale(1.15) rotate(var(--rot)) !important; }
+  .sticky-marker::after{
+    content:''; position:absolute; bottom:0; right:0; width:0; height:0;
+    border-style:solid; border-width:0 0 8px 8px;
+    border-color:transparent transparent rgba(255,255,255,.6) transparent;
+  }
+
+  .landmark-dot{ width:8px; height:8px; border-radius:50%; background:var(--ink); border:2px solid rgba(246,242,234,.95); box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  .leaflet-tooltip.landmark-tip{ background:var(--ink); color:#fff; border:none; font-family:'Inter', sans-serif; font-size:11px; font-weight:700; padding:4px 9px; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.25); }
+  .leaflet-tooltip.landmark-tip::before{ display:none; }
+
+  .leaflet-popup-content-wrapper{ border-radius:12px; box-shadow:0 10px 30px rgba(31,53,71,.3); }
+  .leaflet-popup-content{ font-family:'Inter', sans-serif; font-size:13px; margin:12px 14px; }
+  .leaflet-popup-tip{ background:var(--paper); }
+  .popup-cats{ margin:0 0 6px; }
+  .popup-tag{ display:inline-block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#fff; padding:2px 8px; border-radius:999px; margin:0 4px 4px 0; }
+
+  @media (max-width: 800px){
+    .layout{ flex-direction:column; }
+    #map{ height:52vh; flex:none; }
+    .sidebar{ max-width:none; border-left:none; border-top:1px solid var(--line); flex:1; }
+    header{ flex-direction:column; align-items:stretch; }
+    .header-actions{ align-items:stretch; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <p class="eyebrow">SUNI Community Engagement</p>
+    <h1 class="display-font">Sunnyside Speaks</h1>
+    <p class="tagline">Tap the map. Leave a sticky note about what your block needs.</p>
+  </div>
+  <div class="header-actions">
+    <button class="add-note-btn" id="addNoteBtn">+ Add a sticky note</button>
+    <a class="survey-link" href="https://docs.google.com/forms/d/e/1FAIpQLSeM792Dj4VpH5oYj_-um4h6GAcScxFsnGBKtwaTcyTDg8SkNA/viewform" target="_blank" rel="noopener">or take the full survey →</a>
+  </div>
+</header>
+
+<div id="statusArea"></div>
+
+<div class="control-bar">
+  <p class="steps">
+    Filter the map by topic <span class="faint">— tap a topic to show only those reports, tap again to clear it</span>
+    <button class="clear-filters" id="clearFilters" style="display:none;">Clear filters</button>
+  </p>
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap;">
+    <div class="chip-row" id="chipRow"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="view-toggle" id="basemapToggle">
+        <button class="view-btn active" data-basemap="street">Map</button>
+        <button class="view-btn" data-basemap="satellite">Satellite</button>
+      </div>
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-btn active" data-view="pins">Pins</button>
+        <button class="view-btn" data-view="heat">Heat map</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div id="map"></div>
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <h2 class="display-font">What neighbors are saying</h2>
+      <p id="feedSubcount">Loading responses…</p>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="refresh-btn" id="refreshBtn" type="button">Refresh</button>
+        <button class="refresh-btn" id="downloadBtn" type="button">Download CSV</button>
+      </div>
+    </div>
+    <div class="feed" id="feed"></div>
+  </aside>
+</div>
+
+<footer>
+  <span>Sticky notes post instantly and live for everyone. Survey responses feed SUNI's grant and DOTI advocacy work.</span>
+  <span>Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script>
+(function(){
+
+  var CATEGORIES = [
+    { id:'trees',    label:'Street Trees',           color:'#5F7F5C' },
+    { id:'lighting', label:'Lamp Posts & Lighting',  color:'#B3821E' },
+    { id:'sidewalks',label:'Sidewalks',              color:'#734A64' },
+    { id:'traffic',  label:'Traffic Safety',         color:'#A23E2E' },
+    { id:'graffiti', label:'Graffiti & Litter',      color:'#2B6870' },
+    { id:'other',    label:'Other Concerns',         color:'#5B6670' }
+  ];
+  var catById = {};
+  CATEGORIES.forEach(function(c){ catById[c.id] = c; });
+
+  // ----- Street grid for showing an approximate location on each point -----
+  // Computed from confirmed anchor points, not a live geocoder -- this never breaks or needs an API key.
+  var NS_STREETS = {
+    "Federal Blvd": -105.02435, "Eliot St": -105.022925, "Decatur St": -105.0215,
+    "Clay St": -105.020075, "Bryant St": -105.01865, "Alcott St": -105.017225,
+    "Zuni St": -105.0158, "Wyandot St": -105.014375, "Vallejo St": -105.01295,
+    "Umatilla St": -105.011525, "Tejon St": -105.0101, "Shoshone St": -105.008675,
+    "Raritan St": -105.00725, "Quivas St": -105.005825, "Osage St": -105.0044,
+    "Navajo St": -105.002975, "Mariposa St": -105.00155, "Lipan St": -105.000125,
+    "Kalamath St": -104.9987, "Jason St": -104.997275, "Inca St": -104.99585
+  };
+  var EW_AVENUES = {
+    "38": 39.7693, "39": 39.770517, "40": 39.771733, "41": 39.77295,
+    "42": 39.774167, "43": 39.775383, "44": 39.7766, "45": 39.777817,
+    "46": 39.779033, "47": 39.78025, "48": 39.781467
+  };
+
+  function nearestCrossStreets(lat, lng){
+    var bestStreet = null, bestStreetDist = Infinity;
+    for(var name in NS_STREETS){
+      var d = Math.abs(NS_STREETS[name] - lng);
+      if(d < bestStreetDist){ bestStreetDist = d; bestStreet = name; }
+    }
+    var bestAve = null, bestAveDist = Infinity;
+    for(var num in EW_AVENUES){
+      var d2 = Math.abs(EW_AVENUES[num] - lat);
+      if(d2 < bestAveDist){ bestAveDist = d2; bestAve = num; }
+    }
+    if(!bestStreet || !bestAve) return '';
+    return 'Near ' + bestStreet + ' & W ' + bestAve + (bestAve === '1' ? 'st' : (bestAve.slice(-1) === '1' && bestAve !== '11' ? 'st' : bestAve.slice(-1) === '2' && bestAve !== '12' ? 'nd' : bestAve.slice(-1) === '3' && bestAve !== '13' ? 'rd' : 'th')) + ' Ave';
+  }
+
+  // ----- Historical survey data (static, geocoded ahead of time) -----
+  var CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRk1XS4bHBcc6OPw-m6ZDfIIuPLEfCORAj9CuoQB5l1ca5fhgPdY4ZJt3R_NzIGAefWl-XB87eb7bZh/pub?gid=1336826441&single=true&output=csv';
+  var ADDRESS_CACHE = {"1540 w 40th ave.": [39.771702, -105.004731], "1616 w 42nd ave": [39.773927, -105.006727], "1840 w 40th ave. denver, co 80211": [39.7715, -105.008967], "2010 w elk pl": [39.782464, -105.011366], "2030 w 43rd ave": [39.775256, -105.011641], "2535 w 42nd ave denver": [39.774412, -105.018322], "2732 w. 42nd ave.": [39.77393, -105.021403], "3809 tejon st": [39.769488, -105.01131], "3828 tejon st": [39.769826, -105.010978], "3961 inca street": [39.771157, -104.998739], "4030 tejon st": [39.772271, -105.011077], "4036 tejon st denver, co 80211": [39.772508, -105.011014], "4038 tejon st, unit b": [39.772212, -105.011109], "4040 tejon street, unit a": [39.772231, -105.01111], "4112 tejon st": [39.773255, -105.010872], "4114 tejon st": [39.773256, -105.011041], "4209 tejon": [39.77443, -105.011503], "4250 tejon street": [39.775081, -105.010958], "42nd and pecos": [39.7739, -105.0128], "4309 eliot street": [39.775609, -105.023877], "4318 shoshone st": [39.7758, -105.009715], "4339 bryant st": [39.776152, -105.019287], "4349 raritan": [39.776277, -105.009062], "4349 raritan st": [39.776277, -105.009062], "4545 n clay st, 80211": [39.779276, -105.020768], "4687 beach court": [39.781727, -105.018482], "4700/4680 n jason st": [39.7847, -105.0015], "4719 tejon st.denver, co 80211": [39.781824, -105.011362], "4805 perry st, denver": [39.783998, -105.039529], "4959 tejon": [39.786673, -105.01131]};
+
+  // ----- Firebase config: paste your project's config object here -----
+  var firebaseConfig = {
+  apiKey: "AIzaSyCgxt3Y6UZNoHQaRbBXVGaB7xaMeKKdBH4",
+  authDomain: "sunnyside-speaks.firebaseapp.com",
+  projectId: "sunnyside-speaks",
+  storageBucket: "sunnyside-speaks.firebasestorage.app",
+  messagingSenderId: "381671433001",
+  appId: "1:381671433001:web:283f40a2e4423264180d38",
+  measurementId: "G-9C02R9YRSR"
+  };
+  var isFirebaseConfigured = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('PASTE_YOUR') === -1;
+
+  var db = null;
+  var storage = null;
+  if(isFirebaseConfigured){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    storage = firebase.storage();
+  }
+
+  var surveyResponses = [];   // static, from CSV
+  var stickyNotes = [];       // live, from Firestore
+  var activeFilters = new Set();
+  var markerLayer = null;
+  var heatLayer = null;
+  var currentView = 'pins';
+  var isLoading = false;
+  var isPlacing = false;
+  var pendingLatLng = null;
+
+  // ---------------- Map setup ----------------
+  var SUNNYSIDE_BOUNDS = [[39.764, -105.032], [39.789, -104.994]];
+  var map = L.map('map', {
+    maxBounds: SUNNYSIDE_BOUNDS,
+    maxBoundsViscosity: 0.5,
+    minZoom: 14,
+    maxZoom: 18,
+    zoomControl: false
+  }).setView([39.7748, -105.0110], 15);
+
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+
+  var streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    subdomains:'abcd',
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+  }).addTo(map);
+
+  var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: '&copy; Esri, Maxar, Earthstar Geographics'
+  });
+
+  markerLayer = L.layerGroup().addTo(map);
+
+  var LANDMARKS = [
+    { name:'38th Ave Corridor', lat:39.7693, lng:-105.0101 },
+    { name:'41st / Tejon Corridor', lat:39.7730, lng:-105.0101 },
+    { name:'44th / Zuni Corridor', lat:39.7766, lng:-105.0158 },
+    { name:'Chaffee Park', lat:39.7754, lng:-105.0101 }
+  ];
+  LANDMARKS.forEach(function(lm){
+    var marker = L.marker([lm.lat, lm.lng], {
+      icon: L.divIcon({ className:'', html:'<div class="landmark-dot"></div>', iconSize:[8,8], iconAnchor:[4,4] })
+    }).addTo(map);
+    marker.bindTooltip(lm.name, { className:'landmark-tip', direction:'top', offset:[0,-6] });
+  });
+
+  function pinIcon(color){
+    return L.divIcon({
+      className: '',
+      html: '<div class="pin-marker" style="background:' + color + '"></div>',
+      iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -10]
+    });
+  }
+
+  function hashRotation(id){
+    var h = 0;
+    for(var i=0;i<id.length;i++){ h = (h * 31 + id.charCodeAt(i)) % 1000; }
+    return (h % 16) - 8; // -8deg to 8deg
+  }
+
+  function stickyIcon(color, id){
+    var rot = hashRotation(id);
+    return L.divIcon({
+      className: '',
+      html: '<div class="sticky-marker" style="background:' + color + '; --rot:' + rot + 'deg; transform:rotate(' + rot + 'deg);"></div>',
+      iconSize: [20, 20], iconAnchor: [10, 10], popupAnchor: [0, -12]
+    });
+  }
+
+  // ---------------- Status banner ----------------
+  function showStatus(message, kind){
+    var el = document.getElementById('statusArea');
+    if(!message){ el.innerHTML = ''; return; }
+    var spinner = kind === 'loading' ? '<div class="spinner"></div>' : '';
+    el.innerHTML = '<div class="status-banner' + (kind ? ' ' + kind : '') + '"><span style="display:flex;align-items:center;gap:10px;">' + spinner + '<span>' + message + '</span></span></div>';
+  }
+
+  function showPlacingBanner(){
+    var el = document.getElementById('statusArea');
+    el.innerHTML =
+      '<div class="status-banner placing" style="flex-direction:column;align-items:stretch;gap:8px;">' +
+        '<span style="display:flex;justify-content:space-between;align-items:center;">' +
+          '<span>\uD83D\uDCCD Tap anywhere on the map to place your sticky note</span>' +
+          '<button class="cancel-place" id="cancelPlaceBtn">Cancel</button>' +
+        '</span>' +
+        '<span style="display:flex;gap:8px;">' +
+          '<input type="text" id="addressSearchInput" placeholder="Or search an address to jump there first\u2026" ' +
+            'style="flex:1;border:1.5px solid var(--line);border-radius:8px;padding:7px 10px;font-family:inherit;font-size:13px;">' +
+          '<button class="btn btn-ghost" id="addressSearchBtn" style="background:var(--paper);border:1.5px solid var(--line);">Search</button>' +
+        '</span>' +
+        '<span id="addressSearchStatus" style="font-size:12px;"></span>' +
+      '</div>';
+    document.getElementById('cancelPlaceBtn').addEventListener('click', exitPlacingMode);
+    document.getElementById('addressSearchBtn').addEventListener('click', runAddressSearch);
+    document.getElementById('addressSearchInput').addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); runAddressSearch(); }
+    });
+  }
+
+  async function runAddressSearch(){
+    var input = document.getElementById('addressSearchInput');
+    var statusEl = document.getElementById('addressSearchStatus');
+    var query = input.value.trim();
+    if(!query) return;
+    statusEl.textContent = 'Searching\u2026';
+    statusEl.style.color = '#6B4F1D';
+    try{
+      var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query + ' Denver Colorado') +
+                '&lat=39.7748&lon=-105.0110&limit=1';
+      var res = await fetch(url);
+      var data = await res.json();
+      if(data && data.features && data.features.length > 0){
+        var coords = data.features[0].geometry.coordinates; // [lng, lat]
+        map.flyTo([coords[1], coords[0]], 17, { duration: 0.7 });
+        statusEl.textContent = 'Found it \u2014 now tap the map to drop your note.';
+        statusEl.style.color = '#2B6870';
+      }else{
+        statusEl.textContent = 'Couldn\u2019t find that address \u2014 try panning the map manually instead.';
+        statusEl.style.color = '#A23E2E';
+      }
+    }catch(e){
+      console.error('Address search failed', e);
+      statusEl.textContent = 'Search isn\u2019t working right now \u2014 try panning the map manually instead.';
+      statusEl.style.color = '#A23E2E';
+    }
+  }
+
+  // ---------------- CSV (historical survey) loading ----------------
+  function findKey_(row, needle){
+    var keys = Object.keys(row);
+    for(var i=0;i<keys.length;i++){
+      if(keys[i].toLowerCase().indexOf(needle) !== -1) return keys[i];
+    }
+    return null;
+  }
+
+  function categorize(conditionsText){
+    var text = (conditionsText || '').toLowerCase();
+    var cats = [];
+    var rules = [
+      ['trees', ['street tree']],
+      ['lighting', ['lamp post', 'street light']],
+      ['sidewalks', ['sidewalk']],
+      ['traffic', ['speeding', 'traffic safety']],
+      ['graffiti', ['graffiti', 'litter']]
+    ];
+    rules.forEach(function(r){
+      for(var i=0;i<r[1].length;i++){
+        if(text.indexOf(r[1][i]) !== -1){ cats.push(r[0]); break; }
+      }
+    });
+    if(cats.length === 0 && text.trim() !== '') cats.push('other');
+    return cats;
+  }
+
+  function lookupCoords(address){
+    var key = address.trim().toLowerCase();
+    return ADDRESS_CACHE[key] || null;
+  }
+
+  function sleep(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
+
+  async function fetchCsvWithRetry(maxAttempts){
+    var lastError = null;
+    for(var attempt = 1; attempt <= maxAttempts; attempt++){
+      try{
+        var res = await fetch(CSV_URL, { cache: 'no-store' });
+        if(!res.ok) throw new Error('CSV request failed: ' + res.status);
+        return await res.text();
+      }catch(e){
+        lastError = e;
+        if(attempt < maxAttempts) await sleep(1500 * attempt);
+      }
+    }
+    throw lastError;
+  }
+
+  async function loadSurveyResponses(isRefresh){
+    if(isLoading) return;
+    isLoading = true;
+    try{
+      if(!isRefresh) showStatus('Loading survey responses…', 'loading');
+      var csvText = await fetchCsvWithRetry(3);
+      var parsed = Papa.parse(csvText, { header:true, skipEmptyLines:true });
+      var rows = parsed.data;
+
+      var addrKey = rows.length ? findKey_(rows[0], 'property address') : null;
+      var roleKey = rows.length ? findKey_(rows[0], 'role') : null;
+      var condKey = rows.length ? findKey_(rows[0], 'which of the following conditions') : null;
+      var tsKey = rows.length ? findKey_(rows[0], 'timestamp') : null;
+      var latKey = rows.length ? findKey_(rows[0], 'geocoded lat') : null;
+      var lngKey = rows.length ? findKey_(rows[0], 'geocoded lng') : null;
+
+      var out = [];
+      var skipped = 0;
+      for(var i = 0; i < rows.length; i++){
+        var row = rows[i];
+        var address = addrKey ? row[addrKey] : '';
+        if(!address || !address.trim()) continue;
+        var coords = null;
+        var sheetLat = latKey ? parseFloat(row[latKey]) : NaN;
+        var sheetLng = lngKey ? parseFloat(row[lngKey]) : NaN;
+        if(!isNaN(sheetLat) && !isNaN(sheetLng)){
+          coords = [sheetLat, sheetLng]; // auto-geocoded by the Apps Script trigger
+        }else{
+          coords = lookupCoords(address); // fallback for older, pre-trigger rows
+        }
+        if(!coords){ skipped++; continue; }
+        out.push({
+          source: 'survey',
+          id: 'survey_' + i,
+          lat: coords[0], lng: coords[1],
+          categories: categorize(condKey ? row[condKey] : ''),
+          role: (roleKey ? row[roleKey] : '') || '',
+          comment: '',
+          location: address.trim(),
+          timestamp: tsKey ? (new Date(row[tsKey]).getTime() || Date.now()) : Date.now()
+        });
+      }
+      surveyResponses = out;
+      if(!isFirebaseConfigured){
+        showStatus(skipped > 0 ? (skipped + ' response(s) need a fresh address refresh — let Claude know.') : '', skipped > 0 ? 'error' : null);
+      }else if(skipped > 0){
+        showStatus(skipped + ' older survey response(s) need an address refresh — let Claude know.', 'error');
+      }else{
+        showStatus('');
+      }
+    }catch(e){
+      console.error('Could not load survey data', e);
+      showStatus('Couldn\u2019t reach the survey sheet right now. Try Refresh in a moment.', 'error');
+    }
+    renderAll();
+    isLoading = false;
+  }
+
+  // ---------------- Firestore (live sticky notes) ----------------
+  function startStickyNoteListener(){
+    if(!db){
+      if(!isFirebaseConfigured){
+        var el = document.getElementById('statusArea');
+        var existing = el.innerHTML;
+        el.innerHTML = existing + (existing ? '' : '') +
+          '<div class="status-banner">Sticky notes aren\u2019t connected yet \u2014 paste your Firebase config into <code>firebaseConfig</code> near the top of the script to go live.</div>';
+      }
+      return;
+    }
+    db.collection('sticky_notes').orderBy('timestamp', 'desc').limit(500)
+      .onSnapshot(function(snapshot){
+        stickyNotes = [];
+        snapshot.forEach(function(doc){
+          var d = doc.data();
+          stickyNotes.push({
+            source: 'sticky',
+            id: doc.id,
+            lat: d.lat, lng: d.lng,
+            categories: [d.category],
+            role: '',
+            comment: d.comment || '',
+            name: d.name || '',
+            photoUrl: d.photoUrl || null,
+            location: nearestCrossStreets(d.lat, d.lng),
+            timestamp: (d.timestamp && d.timestamp.toMillis) ? d.timestamp.toMillis() : Date.now()
+          });
+        });
+        renderAll();
+      }, function(err){
+        console.error('Sticky note listener error', err);
+        showStatus('Couldn\u2019t connect to live sticky notes. Check your Firebase setup.', 'error');
+      });
+  }
+
+  function compressImage(file, maxWidth, quality){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(e){
+        var img = new Image();
+        img.onload = function(){
+          var scale = Math.min(1, maxWidth / img.width);
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(function(blob){
+            if(blob) resolve(blob); else reject(new Error('Could not compress image'));
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = function(){ reject(new Error('Could not read image')); };
+        img.src = e.target.result;
+      };
+      reader.onerror = function(){ reject(new Error('Could not read file')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function postStickyNote(entry, photoFile){
+    if(!db) return false;
+    try{
+      var docRef = db.collection('sticky_notes').doc();
+      var photoUrl = null;
+
+      if(photoFile){
+        var compressed = await compressImage(photoFile, 1200, 0.75);
+        var storageRef = storage.ref().child('sticky_photos/' + docRef.id + '.jpg');
+        await storageRef.put(compressed, { contentType: 'image/jpeg' });
+        photoUrl = await storageRef.getDownloadURL();
+      }
+
+      await docRef.set({
+        lat: entry.lat,
+        lng: entry.lng,
+        category: entry.category,
+        comment: entry.comment,
+        name: entry.name || '',
+        photoUrl: photoUrl,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      return true;
+    }catch(e){
+      console.error('Could not post sticky note', e);
+      return false;
+    }
+  }
+
+  // ---------------- Rendering ----------------
+  function timeAgo(ts){
+    var diff = Math.max(0, Date.now() - ts);
+    var mins = Math.floor(diff / 60000);
+    if(mins < 1) return 'just now';
+    if(mins < 60) return mins + 'm ago';
+    var hrs = Math.floor(mins / 60);
+    if(hrs < 24) return hrs + 'h ago';
+    var days = Math.floor(hrs / 24);
+    if(days === 1) return '1 day ago';
+    if(days < 30) return days + ' days ago';
+    var months = Math.floor(days / 30);
+    return months + (months === 1 ? ' month ago' : ' months ago');
+  }
+
+  function allEntries(){ return surveyResponses.concat(stickyNotes); }
+
+  function filteredEntries(){
+    var all = allEntries();
+    if(activeFilters.size === 0) return all;
+    return all.filter(function(s){
+      return s.categories.some(function(c){ return activeFilters.has(c); });
+    });
+  }
+
+  function renderChips(){
+    var row = document.getElementById('chipRow');
+    row.innerHTML = '';
+    var all = allEntries();
+    CATEGORIES.forEach(function(cat){
+      var count = all.filter(function(s){ return s.categories.indexOf(cat.id) !== -1; }).length;
+      var isActive = activeFilters.has(cat.id);
+      var chip = document.createElement('div');
+      chip.className = 'chip' + (isActive ? ' active' : '');
+      if(isActive){ chip.style.background = cat.color; }
+      chip.innerHTML =
+        '<span class="dot" style="background:' + (isActive ? 'rgba(255,255,255,.9)' : cat.color) + '"></span>' +
+        '<span>' + cat.label + '</span>' +
+        '<span class="count">' + count + '</span>';
+      chip.addEventListener('click', function(){
+        if(activeFilters.has(cat.id)) activeFilters.delete(cat.id);
+        else activeFilters.add(cat.id);
+        renderAll();
+      });
+      row.appendChild(chip);
+    });
+    document.getElementById('clearFilters').style.display = activeFilters.size > 0 ? 'inline' : 'none';
+  }
+
+  function renderMarkers(){
+    if(currentView === 'heat'){
+      renderHeatLayer();
+      return;
+    }
+    if(heatLayer){ map.removeLayer(heatLayer); heatLayer = null; }
+    if(!map.hasLayer(markerLayer)) map.addLayer(markerLayer);
+
+    markerLayer.clearLayers();
+    filteredEntries().forEach(function(s){
+      var primary = catById[s.categories[0]] || CATEGORIES[5];
+      var marker;
+      if(s.source === 'sticky'){
+        marker = L.marker([s.lat, s.lng], { icon: stickyIcon(primary.color, s.id) }).addTo(markerLayer);
+      }else{
+        marker = L.marker([s.lat, s.lng], { icon: pinIcon(primary.color) }).addTo(markerLayer);
+      }
+      var tags = s.categories.map(function(cid){
+        var c = catById[cid] || CATEGORIES[5];
+        return '<span class="popup-tag" style="background:' + c.color + '">' + c.label + '</span>';
+      }).join('');
+      marker.bindPopup(
+        '<div class="popup-cats">' + tags + '</div>' +
+        (s.photoUrl ? '<a href="' + s.photoUrl + '" target="_blank" rel="noopener"><img src="' + s.photoUrl + '" style="width:100%;max-width:220px;border-radius:8px;margin-bottom:6px;display:block;"></a>' : '') +
+        (s.location ? '<div style="font-weight:700;color:var(--ink);margin-bottom:3px;">' + escapeHtml(s.location) + '</div>' : '') +
+        (s.comment ? '<div style="margin-bottom:4px;">' + escapeHtml(s.comment) + '</div>' : '') +
+        (s.role ? '<div>' + escapeHtml(s.role) + '</div>' : '') +
+        (s.name ? '<div><em>\u2014 ' + escapeHtml(s.name) + '</em></div>' : '') +
+        '<div style="color:#999;font-size:11px;margin-top:4px;">' + (s.source === 'sticky' ? 'Posted' : 'Reported') + ' ' + timeAgo(s.timestamp) + '</div>'
+      );
+    });
+  }
+
+  function renderHeatLayer(){
+    if(map.hasLayer(markerLayer)) map.removeLayer(markerLayer);
+    var points = filteredEntries().map(function(s){ return [s.lat, s.lng, 0.6]; });
+    if(heatLayer){
+      heatLayer.setLatLngs(points);
+    }else{
+      heatLayer = L.heatLayer(points, { radius: 30, blur: 25, maxZoom: 18, minOpacity: 0.35 }).addTo(map);
+    }
+  }
+
+  var viewToggle = document.getElementById('viewToggle');
+  viewToggle.addEventListener('click', function(e){
+    var btn = e.target.closest('.view-btn');
+    if(!btn) return;
+    currentView = btn.getAttribute('data-view');
+    viewToggle.querySelectorAll('.view-btn').forEach(function(b){ b.classList.toggle('active', b === btn); });
+    renderMarkers();
+  });
+
+  var basemapToggle = document.getElementById('basemapToggle');
+  basemapToggle.addEventListener('click', function(e){
+    var btn = e.target.closest('.view-btn');
+    if(!btn) return;
+    var mode = btn.getAttribute('data-basemap');
+    basemapToggle.querySelectorAll('.view-btn').forEach(function(b){ b.classList.toggle('active', b === btn); });
+    if(mode === 'satellite'){
+      if(map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+      if(!map.hasLayer(satelliteLayer)) satelliteLayer.addTo(map);
+    }else{
+      if(map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+      if(!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+    }
+  });
+
+  function renderFeed(){
+    var feed = document.getElementById('feed');
+    var subcount = document.getElementById('feedSubcount');
+    var list = filteredEntries().slice().sort(function(a,b){ return b.timestamp - a.timestamp; });
+    var all = allEntries();
+
+    var totalLabel = all.length + ' response' + (all.length === 1 ? '' : 's') +
+      (activeFilters.size > 0 ? ' · showing ' + list.length : '');
+    subcount.textContent = totalLabel;
+
+    if(list.length === 0){
+      feed.innerHTML = '<div class="empty-state">Nothing here yet.<br>Tap \u201c+ Add a sticky note\u201d to be the first.</div>';
+      return;
+    }
+
+    feed.innerHTML = '';
+    list.forEach(function(s){
+      var item = document.createElement('div');
+      item.className = 'feed-item';
+      var tagHtml = s.categories.map(function(cid){
+        var c = catById[cid] || CATEGORIES[5];
+        return '<span class="feed-cat" style="background:' + c.color + '">' + c.label + '</span>';
+      }).join('');
+      item.innerHTML =
+        '<div class="feed-item-top">' + tagHtml +
+          '<span class="feed-source">' + (s.source === 'sticky' ? 'Sticky note' : 'Survey') + '</span>' +
+          '<span class="feed-time">' + timeAgo(s.timestamp) + '</span>' +
+        '</div>' +
+        (s.photoUrl ? '<img src="' + s.photoUrl + '" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin:4px 0;">' : '') +
+        (s.location ? '<p class="feed-location">' + escapeHtml(s.location) + '</p>' : '') +
+        (s.comment ? '<p class="feed-comment">' + escapeHtml(s.comment) + '</p>' : '') +
+        (s.role ? '<p class="feed-role">' + escapeHtml(s.role) + '</p>' : '');
+      item.addEventListener('click', function(){
+        map.flyTo([s.lat, s.lng], 17, { duration:0.6 });
+      });
+      feed.appendChild(item);
+    });
+  }
+
+  function escapeHtml(str){
+    var div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  function renderAll(){
+    renderChips();
+    renderMarkers();
+    renderFeed();
+  }
+
+  document.getElementById('clearFilters').addEventListener('click', function(){
+    activeFilters.clear();
+    renderAll();
+  });
+
+  // ---------------- Add-a-sticky-note flow ----------------
+  var addNoteBtn = document.getElementById('addNoteBtn');
+  var mapEl = document.getElementById('map');
+
+  function enterPlacingMode(){
+    if(!isFirebaseConfigured){
+      showStatus('Sticky notes aren\u2019t connected yet \u2014 this map needs a Firebase config to accept new posts.', 'error');
+      return;
+    }
+    isPlacing = true;
+    addNoteBtn.classList.add('active');
+    addNoteBtn.textContent = 'Cancel';
+    mapEl.classList.add('placing');
+    showPlacingBanner();
+  }
+
+  function exitPlacingMode(){
+    isPlacing = false;
+    addNoteBtn.classList.remove('active');
+    addNoteBtn.textContent = '+ Add a sticky note';
+    mapEl.classList.remove('placing');
+    showStatus('');
+  }
+
+  addNoteBtn.addEventListener('click', function(){
+    if(isPlacing) exitPlacingMode();
+    else enterPlacingMode();
+  });
+
+  map.on('click', function(e){
+    if(!isPlacing) return;
+    pendingLatLng = e.latlng;
+    exitPlacingMode();
+    openComposeModal(pendingLatLng);
+  });
+
+  function openComposeModal(latlng){
+    var selectedCat = null;
+    var scrim = document.createElement('div');
+    scrim.className = 'scrim';
+    var chipsHtml = CATEGORIES.map(function(cat){
+      return '<div class="cat-option" data-cat="' + cat.id + '" style="--c:' + cat.color + '">' +
+        '<span class="dot" style="background:' + cat.color + '"></span><span>' + cat.label + '</span></div>';
+    }).join('');
+    scrim.innerHTML =
+      '<div class="modal">' +
+        '<h3 class="display-font">Add your sticky note</h3>' +
+        '<p class="hint">What should neighbors know about this spot?</p>' +
+        '<label>Topic</label>' +
+        '<div class="cat-picker">' + chipsHtml + '</div>' +
+        '<label for="noteComment">Your note</label>' +
+        '<textarea id="noteComment" rows="3" maxlength="200" placeholder="e.g. This corner really needs better lighting."></textarea>' +
+        '<div class="char-count"><span id="charCount">200</span> characters left</div>' +
+        '<label for="noteName">Name <span style="font-weight:400;color:#a49c8d;">(optional)</span></label>' +
+        '<input type="text" id="noteName" maxlength="40" placeholder="First name is plenty">' +
+        '<label>Photo <span style="font-weight:400;color:#a49c8d;">(optional)</span></label>' +
+        '<div id="photoPreviewArea" style="margin-bottom:14px;"></div>' +
+        '<input type="file" id="notePhoto" accept="image/*" capture="environment" style="font-size:12.5px;margin-bottom:14px;">' +
+        '<div class="modal-actions">' +
+          '<button class="btn btn-ghost" id="cancelNoteBtn">Cancel</button>' +
+          '<button class="btn btn-primary" id="submitNoteBtn" disabled>Post it</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(scrim);
+
+    var commentInput = scrim.querySelector('#noteComment');
+    var nameInput = scrim.querySelector('#noteName');
+    var photoInput = scrim.querySelector('#notePhoto');
+    var photoPreviewArea = scrim.querySelector('#photoPreviewArea');
+    var submitBtn = scrim.querySelector('#submitNoteBtn');
+    var charCount = scrim.querySelector('#charCount');
+    var catOptions = scrim.querySelectorAll('.cat-option');
+    var selectedPhotoFile = null;
+
+    photoInput.addEventListener('change', function(){
+      var file = photoInput.files && photoInput.files[0];
+      if(!file){ selectedPhotoFile = null; photoPreviewArea.innerHTML = ''; return; }
+      if(file.size > 10 * 1024 * 1024){
+        photoPreviewArea.innerHTML = '<p style="color:#A23E2E;font-size:12.5px;">That photo is too large \u2014 try a different one.</p>';
+        selectedPhotoFile = null;
+        return;
+      }
+      selectedPhotoFile = file;
+      var reader = new FileReader();
+      reader.onload = function(e){
+        photoPreviewArea.innerHTML =
+          '<div style="position:relative;display:inline-block;">' +
+            '<img src="' + e.target.result + '" style="max-width:100%;max-height:140px;border-radius:8px;display:block;">' +
+            '<button type="button" id="removePhotoBtn" style="position:absolute;top:4px;right:4px;background:rgba(31,53,71,.85);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;">&times;</button>' +
+          '</div>';
+        scrim.querySelector('#removePhotoBtn').addEventListener('click', function(){
+          selectedPhotoFile = null;
+          photoInput.value = '';
+          photoPreviewArea.innerHTML = '';
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function updateSubmitState(){
+      submitBtn.disabled = !(selectedCat && commentInput.value.trim().length > 0);
+    }
+
+    catOptions.forEach(function(opt){
+      opt.addEventListener('click', function(){
+        catOptions.forEach(function(o){ o.classList.remove('selected'); o.style.background=''; });
+        opt.classList.add('selected');
+        opt.style.background = opt.style.getPropertyValue('--c');
+        selectedCat = opt.getAttribute('data-cat');
+        updateSubmitState();
+      });
+    });
+
+    commentInput.addEventListener('input', function(){
+      charCount.textContent = 200 - commentInput.value.length;
+      updateSubmitState();
+    });
+
+    function closeModal(){ document.body.removeChild(scrim); }
+    scrim.querySelector('#cancelNoteBtn').addEventListener('click', closeModal);
+    scrim.addEventListener('click', function(e){ if(e.target === scrim) closeModal(); });
+
+    submitBtn.addEventListener('click', async function(){
+      if(!selectedCat || !commentInput.value.trim()) return;
+      submitBtn.disabled = true;
+      submitBtn.textContent = selectedPhotoFile ? 'Uploading photo\u2026' : 'Posting\u2026';
+      var ok = await postStickyNote({
+        lat: latlng.lat, lng: latlng.lng,
+        category: selectedCat,
+        comment: commentInput.value.trim(),
+        name: nameInput.value.trim()
+      }, selectedPhotoFile);
+      if(ok){
+        closeModal();
+      }else{
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post it';
+        var hint = scrim.querySelector('.hint');
+        hint.textContent = 'Couldn\u2019t post that \u2014 check your connection and try again.';
+        hint.style.color = '#A23E2E';
+      }
+    });
+  }
+
+  // ---------------- CSV export ----------------
+  function csvEscape(val){
+    var s = String(val === undefined || val === null ? '' : val);
+    if(s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1){
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function downloadCsv(){
+    var list = filteredEntries().slice().sort(function(a,b){ return b.timestamp - a.timestamp; });
+    var columns = ['source','categories','location','comment','role','name','date','lat','lng'];
+    var lines = [columns.join(',')];
+    list.forEach(function(s){
+      var row = [
+        s.source === 'sticky' ? 'Sticky Note' : 'Survey',
+        s.categories.map(function(cid){ return (catById[cid] || CATEGORIES[5]).label; }).join('; '),
+        s.location || '',
+        s.comment || '',
+        s.role || '',
+        s.name || '',
+        new Date(s.timestamp).toLocaleString('en-US'),
+        s.lat,
+        s.lng
+      ].map(csvEscape);
+      lines.push(row.join(','));
+    });
+    var csvContent = lines.join('\r\n');
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var dateStr = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = 'sunnyside-speaks-data-' + dateStr + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('downloadBtn').addEventListener('click', downloadCsv);
+
+  // ---------------- Refresh + polling ----------------
+  var refreshBtn = document.getElementById('refreshBtn');
+  refreshBtn.addEventListener('click', async function(){
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing…';
+    await loadSurveyResponses(true);
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = 'Refresh';
+  });
+
+  setInterval(function(){ loadSurveyResponses(true); }, 120000);
+
+  // ---------------- Init ----------------
+  loadSurveyResponses(false);
+  startStickyNoteListener();
+
+})();
+</script>
+
+</body>
+</html>
