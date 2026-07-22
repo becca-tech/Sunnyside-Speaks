@@ -654,6 +654,7 @@
             role: '',
             comment: d.comment || '',
             name: d.name || '',
+            session: d.session || '',
             photoUrl: d.photoUrl || null,
             location: nearestCrossStreets(d.lat, d.lng),
             timestamp: (d.timestamp && d.timestamp.toMillis) ? d.timestamp.toMillis() : Date.now()
@@ -709,6 +710,7 @@
         category: entry.category,
         comment: entry.comment,
         name: entry.name || '',
+        session: entry.session || '',
         photoUrl: photoUrl,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -791,6 +793,7 @@
       }).join('');
       marker.bindPopup(
         '<div class="popup-cats">' + tags + '</div>' +
+        (s.session ? '<div style="font-size:11px;font-weight:700;color:#5C3A6E;margin-bottom:3px;">' + escapeHtml(s.session) + '</div>' : '') +
         (s.photoUrl ? '<a href="' + s.photoUrl + '" target="_blank" rel="noopener"><img src="' + s.photoUrl + '" style="width:100%;max-width:220px;border-radius:8px;margin-bottom:6px;display:block;"></a>' : '') +
         (s.location ? '<div style="font-weight:700;color:var(--ink);margin-bottom:3px;">' + escapeHtml(s.location) + '</div>' : '') +
         (s.comment ? '<div style="margin-bottom:4px;">' + escapeHtml(s.comment) + '</div>' : '') +
@@ -861,6 +864,7 @@
       item.innerHTML =
         '<div class="feed-item-top">' + tagHtml +
           '<span class="feed-source">' + (s.source === 'sticky' ? 'Sticky note' : 'Survey') + '</span>' +
+          (s.session ? '<span class="feed-source" style="background:#EDE3F0;color:#5C3A6E;">' + escapeHtml(s.session) + '</span>' : '') +
           '<span class="feed-time">' + timeAgo(s.timestamp) + '</span>' +
         '</div>' +
         (s.photoUrl ? '<img src="' + s.photoUrl + '" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px;margin:4px 0;">' : '') +
@@ -931,6 +935,8 @@
     openComposeModal(pendingLatLng, searchResultMarker);
   });
 
+  var lastUsedSession = '';
+
   function openComposeModal(latlng, associatedMarker){
     var selectedCat = null;
     var currentLatLng = { lat: latlng.lat, lng: latlng.lng };
@@ -952,6 +958,8 @@
         '<div class="char-count"><span id="charCount">200</span> characters left</div>' +
         '<label for="noteName">Name <span style="font-weight:400;color:#a49c8d;">(optional)</span></label>' +
         '<input type="text" id="noteName" maxlength="40" placeholder="First name is plenty">' +
+        '<label for="noteSession">Session <span style="font-weight:400;color:#a49c8d;">(optional \u2014 tag this to an event, e.g. Chaffee Park Engagement 7/22/2026)</span></label>' +
+        '<input type="text" id="noteSession" maxlength="80" placeholder="e.g. Chaffee Park Engagement 7/22/2026" value="' + escapeHtml(lastUsedSession) + '">' +
         '<label for="noteAddress">Address <span style="font-weight:400;color:#a49c8d;">(optional \u2014 adjusts the pin location)</span></label>' +
         '<div style="display:flex;gap:8px;margin-bottom:4px;">' +
           '<input type="text" id="noteAddress" placeholder="Type an address to move the pin" style="flex:1;">' +
@@ -970,6 +978,7 @@
 
     var commentInput = scrim.querySelector('#noteComment');
     var nameInput = scrim.querySelector('#noteName');
+    var sessionInput = scrim.querySelector('#noteSession');
     var addressInput = scrim.querySelector('#noteAddress');
     var updateLocationBtn = scrim.querySelector('#updateLocationBtn');
     var addressUpdateStatus = scrim.querySelector('#addressUpdateStatus');
@@ -1077,13 +1086,16 @@
       if(!selectedCat || !commentInput.value.trim()) return;
       submitBtn.disabled = true;
       submitBtn.textContent = selectedPhotoFile ? 'Uploading photo\u2026' : 'Posting\u2026';
+      var sessionValue = sessionInput.value.trim();
       var ok = await postStickyNote({
         lat: currentLatLng.lat, lng: currentLatLng.lng,
         category: selectedCat,
         comment: commentInput.value.trim(),
-        name: nameInput.value.trim()
+        name: nameInput.value.trim(),
+        session: sessionValue
       }, selectedPhotoFile);
       if(ok){
+        lastUsedSession = sessionValue;
         closeModal();
       }else{
         submitBtn.disabled = false;
@@ -1106,11 +1118,12 @@
 
   function downloadCsv(){
     var list = filteredEntries().slice().sort(function(a,b){ return b.timestamp - a.timestamp; });
-    var columns = ['source','categories','location','comment','role','name','date','lat','lng'];
+    var columns = ['source','session','categories','location','comment','role','name','date','lat','lng'];
     var lines = [columns.join(',')];
     list.forEach(function(s){
       var row = [
         s.source === 'sticky' ? 'Sticky Note' : 'Survey',
+        s.session || '',
         s.categories.map(function(cid){ return (catById[cid] || CATEGORIES[5]).label; }).join('; '),
         s.location || '',
         s.comment || '',
