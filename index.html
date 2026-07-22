@@ -430,6 +430,21 @@
     marker.bindTooltip(lm.name, { className:'landmark-tip', direction:'top', offset:[0,-6] });
   });
 
+  // Focus areas matching the physical poster boards used at engagement events
+  var FOCUS_AREAS = [
+    { name: '44th Corridor', bounds: [[39.7751, -105.0158], [39.7781, -105.0044]] },
+    { name: 'Chaffee Park', bounds: [[39.7754, -105.0101], [39.7778, -105.0087]] },
+    { name: '41st & Tejon Commercial Node', bounds: [[39.7715, -105.0116], [39.7744, -105.0086]] },
+    { name: 'Sunnyside Innovation District', bounds: [[39.7778, -105.0015], [39.7815, -104.9958]] },
+    { name: 'Commercial Node', bounds: [[39.7751, -105.0015], [39.7781, -104.9973]] }
+  ];
+  FOCUS_AREAS.forEach(function(area){
+    var rect = L.rectangle(area.bounds, {
+      color: '#A23E2E', weight: 2, dashArray: '7,5', fillColor: '#A23E2E', fillOpacity: 0.05
+    }).addTo(map);
+    rect.bindTooltip(area.name, { className: 'landmark-tip', direction: 'center', permanent: false });
+  });
+
   function pinIcon(color){
     return L.divIcon({
       className: '',
