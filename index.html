@@ -288,6 +288,7 @@
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="refresh-btn" id="refreshBtn" type="button">Refresh</button>
         <button class="refresh-btn" id="downloadBtn" type="button" style="display:none;">Download CSV</button>
+        <a class="refresh-btn" id="sheetLinkBtn" href="https://docs.google.com/spreadsheets/d/1TV3OkaYDb4Ux7E94TdxJNrp1xiuqHZa9hZea8oJZnXY/edit?gid=1336826441#gid=1336826441" target="_blank" rel="noopener" style="display:none;text-decoration:none;">Open Sheet</a>
       </div>
     </div>
     <div class="feed" id="feed"></div>
@@ -603,13 +604,14 @@
           coords = lookupCoords(address); // fallback for older, pre-trigger rows
         }
         if(!coords){ skipped++; continue; }
+        var rawConditions = (condKey ? row[condKey] : '') || '';
         out.push({
           source: 'survey',
           id: 'survey_' + i,
           lat: coords[0], lng: coords[1],
-          categories: categorize(condKey ? row[condKey] : ''),
+          categories: categorize(rawConditions),
           role: (roleKey ? row[roleKey] : '') || '',
-          comment: '',
+          comment: rawConditions.trim(),
           location: address.trim(),
           timestamp: tsKey ? (new Date(row[tsKey]).getTime() || Date.now()) : Date.now()
         });
@@ -1148,13 +1150,14 @@
     URL.revokeObjectURL(url);
   }
 
-  // Download CSV stays hidden unless the page is opened with the correct secret link.
+  // Download CSV and the Sheet link stay hidden unless opened with the correct secret link.
   var EXPORT_SECRET = 'OuRZgwZ37xsdcTzqG9yn';
   var urlParams = new URLSearchParams(window.location.search);
   if(urlParams.get('export') === EXPORT_SECRET){
     var dlBtn = document.getElementById('downloadBtn');
     dlBtn.style.display = '';
     dlBtn.addEventListener('click', downloadCsv);
+    document.getElementById('sheetLinkBtn').style.display = '';
   }
 
   // ---------------- Refresh + polling ----------------
