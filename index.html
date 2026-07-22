@@ -430,20 +430,8 @@
     marker.bindTooltip(lm.name, { className:'landmark-tip', direction:'top', offset:[0,-6] });
   });
 
-  // Focus areas matching the physical poster boards used at engagement events
-  var FOCUS_AREAS = [
-    { name: '44th Corridor', bounds: [[39.7754, -105.02435], [39.7778, -105.0101]] },
-    { name: 'Chaffee Park', bounds: [[39.7754, -105.0101], [39.7778, -105.0087]] },
-    { name: '41st & Tejon Commercial Node', bounds: [[39.7712, -105.0122], [39.7748, -105.0080]] },
-    { name: 'Sunnyside Innovation District', bounds: [[39.779033, -105.002975], [39.783, -104.99585]] },
-    { name: 'Commercial Node', bounds: [[39.7766, -105.000125], [39.779033, -104.99585]] }
-  ];
-  FOCUS_AREAS.forEach(function(area){
-    var rect = L.rectangle(area.bounds, {
-      color: '#A23E2E', weight: 2, dashArray: '7,5', fillColor: '#A23E2E', fillOpacity: 0.05
-    }).addTo(map);
-    rect.bindTooltip(area.name, { className: 'landmark-tip', direction: 'center', permanent: false });
-  });
+  // Focus area outlines removed for now (coordinates estimated from a poster image
+  // weren't precise enough) -- can revisit with more exact source coordinates later.
 
   function pinIcon(color){
     return L.divIcon({
