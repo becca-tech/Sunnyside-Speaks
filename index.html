@@ -220,10 +220,26 @@
 
   @media (max-width: 800px){
     .layout{ flex-direction:column; }
-    #map{ height:52vh; flex:none; }
+    #map{ height:44vh; flex:none; }
     .sidebar{ max-width:none; border-left:none; border-top:1px solid var(--line); flex:1; }
-    header{ flex-direction:column; align-items:stretch; }
+    header{ flex-direction:column; align-items:stretch; padding:14px 16px 12px; }
     .header-actions{ align-items:stretch; }
+    .control-bar{ padding:10px 16px; }
+    .steps{ margin-bottom:8px; font-size:12px; }
+    .steps .faint{ display:none; }
+    .chip-row{
+      flex-wrap:nowrap;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+      padding-bottom:4px;
+      margin:0 -16px 8px;
+      padding-left:16px;
+      padding-right:16px;
+    }
+    .chip{ flex-shrink:0; }
+    .control-bar > div{ flex-direction:column; align-items:stretch; gap:8px; }
+    .control-bar > div > div:last-child{ display:flex; gap:8px; }
+    .view-toggle{ flex:1; justify-content:center; }
   }
 </style>
 </head>
@@ -271,7 +287,7 @@
       <p id="feedSubcount">Loading responses…</p>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="refresh-btn" id="refreshBtn" type="button">Refresh</button>
-        <button class="refresh-btn" id="downloadBtn" type="button">Download CSV</button>
+        <button class="refresh-btn" id="downloadBtn" type="button" style="display:none;">Download CSV</button>
       </div>
     </div>
     <div class="feed" id="feed"></div>
@@ -1119,7 +1135,14 @@
     URL.revokeObjectURL(url);
   }
 
-  document.getElementById('downloadBtn').addEventListener('click', downloadCsv);
+  // Download CSV stays hidden unless the page is opened with the correct secret link.
+  var EXPORT_SECRET = 'OuRZgwZ37xsdcTzqG9yn';
+  var urlParams = new URLSearchParams(window.location.search);
+  if(urlParams.get('export') === EXPORT_SECRET){
+    var dlBtn = document.getElementById('downloadBtn');
+    dlBtn.style.display = '';
+    dlBtn.addEventListener('click', downloadCsv);
+  }
 
   // ---------------- Refresh + polling ----------------
   var refreshBtn = document.getElementById('refreshBtn');
