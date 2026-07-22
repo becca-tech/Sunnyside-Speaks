@@ -482,12 +482,18 @@
         searchResultMarker = L.marker([latlng.lat, latlng.lng], {
           icon: L.divIcon({ className:'', html:'<div class="search-result-pin"></div>', iconSize:[26,26], iconAnchor:[13,13] })
         }).addTo(map);
-        statusEl.textContent = 'Found it \u2014 opening your note at this spot\u2026';
+        statusEl.innerHTML = 'Found it \u2014 take a look, then <button type="button" id="continueToNoteBtn" style="background:none;border:none;color:#2B6870;font-weight:700;text-decoration:underline;cursor:pointer;padding:0;">continue whenever you\u2019re ready</button>';
         statusEl.style.color = '#2B6870';
-        setTimeout(function(){
+        var advanced = false;
+        function advanceToNote(){
+          if(advanced) return;
+          advanced = true;
           exitPlacingMode();
           openComposeModal(latlng, searchResultMarker);
-        }, 2200);
+        }
+        var continueBtn = document.getElementById('continueToNoteBtn');
+        if(continueBtn) continueBtn.addEventListener('click', advanceToNote);
+        setTimeout(advanceToNote, 6000);
       }else{
         statusEl.textContent = 'Couldn\u2019t find that address \u2014 try panning the map manually instead.';
         statusEl.style.color = '#A23E2E';
