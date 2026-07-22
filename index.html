@@ -288,8 +288,9 @@
     <div class="sidebar-head">
       <h2 class="display-font">What neighbors are saying</h2>
       <p id="feedSubcount">Loading responses…</p>
-      <div style="display:flex; gap:8px; margin-top:8px;">
+      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
         <button class="refresh-btn" id="refreshBtn" type="button">Refresh</button>
+        <button class="refresh-btn" id="insightsBtn" type="button" style="background:var(--ink);color:#fff;border-color:var(--ink);">\uD83D\uDCCA Survey Insights</button>
         <button class="refresh-btn" id="downloadBtn" type="button" style="display:none;">Download CSV</button>
         <a class="refresh-btn" id="sheetLinkBtn" href="https://docs.google.com/spreadsheets/d/1TV3OkaYDb4Ux7E94TdxJNrp1xiuqHZa9hZea8oJZnXY/edit?gid=1336826441#gid=1336826441" target="_blank" rel="noopener" style="display:none;text-decoration:none;">Open Sheet</a>
       </div>
@@ -381,6 +382,7 @@
   }
 
   var surveyResponses = [];   // static, from CSV
+  var surveyStats = null;     // aggregate stats computed from every parsed row
   var stickyNotes = [];       // live, from Firestore
   var activeFilters = new Set();
   var markerLayer = null;
@@ -576,6 +578,73 @@
     throw lastError;
   }
 
+  var KNOWN_CONDITIONS = [
+    'Vacant or underutilized street tree well', 'Non-functioning or Damaged lamp post',
+    'Dead or declining street tree', 'Sidewalk maintenance concern',
+    'Speeding vehicles and traffic safety concerns', 'Graffiti and/or Litter'
+  ];
+  var KNOWN_TRAFFIC_MEASURES = [
+    'Speed humps or speed cushions', 'Curb extensions (bulb-outs)', 'Raised crosswalks',
+    'Additional pedestrian crossings', 'Protected bike lanes', 'Lower speed limits',
+    'Improved street lighting', 'More street trees and landscaping', 'Increased traffic enforcement'
+  ];
+
+  function computeSurveyStats(rows, cols){
+    var stats = {
+      total: rows.length,
+      conditions: [],
+      importance: [],
+      trafficMeasures: [],
+      coordinatedEffort: { yes:0, maybe:0, no:0, other:0, answered:0 }
+    };
+    var condCounts = {};
+    var measureCounts = {};
+    var importanceCounts = {};
+    cols.importanceFields.forEach(function(f){ importanceCounts[f.label] = { very:0, somewhat:0, not:0 }; });
+
+    rows.forEach(function(row){
+      var condText = cols.condKey ? (row[cols.condKey] || '') : '';
+      KNOWN_CONDITIONS.forEach(function(c){
+        if(condText.indexOf(c) !== -1) condCounts[c] = (condCounts[c] || 0) + 1;
+      });
+
+      cols.importanceFields.forEach(function(f){
+        var val = f.key ? (row[f.key] || '').trim() : '';
+        if(val === 'Very Important') importanceCounts[f.label].very++;
+        else if(val === 'Somewhat Important') importanceCounts[f.label].somewhat++;
+        else if(val === 'Not Important') importanceCounts[f.label].not++;
+      });
+
+      var measuresText = cols.trafficMeasuresKey ? (row[cols.trafficMeasuresKey] || '') : '';
+      KNOWN_TRAFFIC_MEASURES.forEach(function(m){
+        if(measuresText.indexOf(m) !== -1) measureCounts[m] = (measureCounts[m] || 0) + 1;
+      });
+
+      var effortVal = cols.coordinatedEffortKey ? (row[cols.coordinatedEffortKey] || '').trim() : '';
+      if(effortVal === 'Yes'){ stats.coordinatedEffort.yes++; stats.coordinatedEffort.answered++; }
+      else if(effortVal === 'Maybe'){ stats.coordinatedEffort.maybe++; stats.coordinatedEffort.answered++; }
+      else if(effortVal === 'No'){ stats.coordinatedEffort.no++; stats.coordinatedEffort.answered++; }
+      else if(effortVal){ stats.coordinatedEffort.other++; stats.coordinatedEffort.answered++; }
+    });
+
+    stats.conditions = KNOWN_CONDITIONS.map(function(c){
+      return { label: c, count: condCounts[c] || 0, pct: stats.total ? (condCounts[c] || 0) / stats.total : 0 };
+    }).sort(function(a,b){ return b.count - a.count; });
+
+    stats.trafficMeasures = KNOWN_TRAFFIC_MEASURES.map(function(m){
+      return { label: m, count: measureCounts[m] || 0, pct: stats.total ? (measureCounts[m] || 0) / stats.total : 0 };
+    }).sort(function(a,b){ return b.count - a.count; });
+
+    stats.importance = cols.importanceFields.map(function(f){
+      var c = importanceCounts[f.label];
+      var rated = c.very + c.somewhat + c.not;
+      return { label: f.label, very:c.very, somewhat:c.somewhat, not:c.not, rated:rated,
+               pctVery: rated ? c.very / rated : 0 };
+    }).sort(function(a,b){ return b.pctVery - a.pctVery; });
+
+    return stats;
+  }
+
   async function loadSurveyResponses(isRefresh){
     if(isLoading) return;
     isLoading = true;
@@ -591,6 +660,28 @@
       var tsKey = rows.length ? findKey_(rows[0], 'timestamp') : null;
       var latKey = rows.length ? findKey_(rows[0], 'geocoded lat') : null;
       var lngKey = rows.length ? findKey_(rows[0], 'geocoded lng') : null;
+      var treesImportanceKey = rows.length ? findKey_(rows[0], 'replacing missing street trees') : null;
+      var lightingImportanceKey = rows.length ? findKey_(rows[0], 'repairing street lighting') : null;
+      var sidewalksImportanceKey = rows.length ? findKey_(rows[0], 'improving sidewalk appearance') : null;
+      var pedSafetyImportanceKey = rows.length ? findKey_(rows[0], 'enhancing pedestrian safety') : null;
+      var beautificationImportanceKey = rows.length ? findKey_(rows[0], 'beautification of commercial corridors') : null;
+      var trafficImportanceKey = rows.length ? findKey_(rows[0], 'traffic calming measures') : null;
+      var trafficMeasuresKey = rows.length ? findKey_(rows[0], 'traffic calming improvements') : null;
+      var coordinatedEffortKey = rows.length ? findKey_(rows[0], 'coordinated effort') : null;
+
+      surveyStats = computeSurveyStats(rows, {
+        condKey: condKey,
+        trafficMeasuresKey: trafficMeasuresKey,
+        coordinatedEffortKey: coordinatedEffortKey,
+        importanceFields: [
+          { key: treesImportanceKey, label: 'Replacing missing street trees' },
+          { key: lightingImportanceKey, label: 'Repairing street lighting' },
+          { key: sidewalksImportanceKey, label: 'Improving sidewalk appearance' },
+          { key: pedSafetyImportanceKey, label: 'Enhancing pedestrian safety' },
+          { key: beautificationImportanceKey, label: 'Beautification of commercial corridors' },
+          { key: trafficImportanceKey, label: 'Traffic calming measures' }
+        ]
+      });
 
       var out = [];
       var skipped = 0;
@@ -1153,7 +1244,77 @@
     URL.revokeObjectURL(url);
   }
 
-  // Download CSV and the Sheet link stay hidden unless opened with the correct secret link.
+  // ---------------- Survey Insights panel ----------------
+  var CONDITION_COLORS = {
+    'Vacant or underutilized street tree well': '#5F7F5C',
+    'Non-functioning or Damaged lamp post': '#B3821E',
+    'Dead or declining street tree': '#5F7F5C',
+    'Sidewalk maintenance concern': '#734A64',
+    'Speeding vehicles and traffic safety concerns': '#A23E2E',
+    'Graffiti and/or Litter': '#2B6870'
+  };
+
+  function barRow(label, pct, countText, color){
+    return '<div style="margin-bottom:10px;">' +
+      '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">' +
+        '<span>' + escapeHtml(label) + '</span><span style="color:#847c6e;">' + countText + '</span>' +
+      '</div>' +
+      '<div style="background:var(--cream);border-radius:999px;height:8px;overflow:hidden;">' +
+        '<div style="width:' + Math.round(pct*100) + '%;background:' + color + ';height:100%;border-radius:999px;"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function openInsightsModal(){
+    if(!surveyStats){
+      return;
+    }
+    var s = surveyStats;
+    var scrim = document.createElement('div');
+    scrim.className = 'scrim';
+
+    var conditionsHtml = s.conditions.map(function(c){
+      return barRow(c.label, s.total ? c.count / s.total : 0, c.count + ' (' + Math.round(c.pct*100) + '%)', CONDITION_COLORS[c.label] || 'var(--ink)');
+    }).join('');
+
+    var importanceHtml = s.importance.map(function(f){
+      return barRow(f.label, f.pctVery, Math.round(f.pctVery*100) + '% very important', 'var(--brick)');
+    }).join('');
+
+    var measuresHtml = s.trafficMeasures.slice(0, 6).map(function(m){
+      return barRow(m.label, s.total ? m.count / s.total : 0, m.count + ' (' + Math.round(m.pct*100) + '%)', 'var(--teal)');
+    }).join('');
+
+    var ce = s.coordinatedEffort;
+    var ceHtml = ['yes','maybe','no','other'].map(function(k){
+      var labelMap = { yes:'Yes', maybe:'Maybe', no:'No', other:'Other / unclear' };
+      var pct = ce.answered ? ce[k] / ce.answered : 0;
+      return barRow(labelMap[k], pct, ce[k] + ' (' + Math.round(pct*100) + '%)', 'var(--sage)');
+    }).join('');
+
+    scrim.innerHTML =
+      '<div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;border-top-color:var(--ink);">' +
+        '<h3 class="display-font">Survey Insights</h3>' +
+        '<p class="hint">Based on ' + s.total + ' survey response' + (s.total === 1 ? '' : 's') + ' \u2014 updates automatically as new responses come in.</p>' +
+        '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">Conditions reported adjacent to property</h4>' +
+        conditionsHtml +
+        '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">% saying "Very Important" by improvement type</h4>' +
+        importanceHtml +
+        '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">Top traffic calming measures supported</h4>' +
+        measuresHtml +
+        '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">Support for a coordinated tree &amp; lighting restoration effort</h4>' +
+        ceHtml +
+        '<div class="modal-actions" style="margin-top:8px;"><button class="btn btn-primary" id="closeInsightsBtn">Close</button></div>' +
+      '</div>';
+    document.body.appendChild(scrim);
+    function closeInsights(){ document.body.removeChild(scrim); }
+    scrim.querySelector('#closeInsightsBtn').addEventListener('click', closeInsights);
+    scrim.addEventListener('click', function(e){ if(e.target === scrim) closeInsights(); });
+  }
+
+  document.getElementById('insightsBtn').addEventListener('click', openInsightsModal);
+
+
   var EXPORT_SECRET = 'OuRZgwZ37xsdcTzqG9yn';
   var urlParams = new URLSearchParams(window.location.search);
   if(urlParams.get('export') === EXPORT_SECRET){
