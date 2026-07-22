@@ -448,6 +448,8 @@
     });
   }
 
+  var searchResultMarker = null;
+
   async function runAddressSearch(){
     var input = document.getElementById('addressSearchInput');
     var statusEl = document.getElementById('addressSearchStatus');
@@ -462,9 +464,19 @@
       var data = await res.json();
       if(data && data.features && data.features.length > 0){
         var coords = data.features[0].geometry.coordinates; // [lng, lat]
-        map.flyTo([coords[1], coords[0]], 17, { duration: 0.7 });
-        statusEl.textContent = 'Found it \u2014 now tap the map to drop your note.';
+        var latlng = { lat: coords[1], lng: coords[0] };
+        map.flyTo([latlng.lat, latlng.lng], 18, { duration: 0.7 });
+        if(searchResultMarker){ map.removeLayer(searchResultMarker); }
+        searchResultMarker = L.marker([latlng.lat, latlng.lng], {
+          icon: L.divIcon({ className:'', html:'<div style="width:22px;height:22px;border-radius:50%;background:rgba(162,62,45,.25);border:2.5px solid var(--brick);"></div>', iconSize:[22,22], iconAnchor:[11,11] })
+        }).addTo(map);
+        statusEl.textContent = 'Found it \u2014 opening your note at this exact spot\u2026';
         statusEl.style.color = '#2B6870';
+        setTimeout(function(){
+          exitPlacingMode();
+          if(searchResultMarker){ map.removeLayer(searchResultMarker); searchResultMarker = null; }
+          openComposeModal(latlng);
+        }, 600);
       }else{
         statusEl.textContent = 'Couldn\u2019t find that address \u2014 try panning the map manually instead.';
         statusEl.style.color = '#A23E2E';
