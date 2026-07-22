@@ -221,7 +221,8 @@
   @media (max-width: 800px){
     .layout{ flex-direction:column; }
     #map{ height:44vh; flex:none; }
-    .sidebar{ max-width:none; border-left:none; border-top:1px solid var(--line); flex:1; }
+    .sidebar{ max-width:none; border-left:none; border-top:1px solid var(--line); flex:none; min-height:0; }
+    .feed{ overflow-y:visible; flex:none; }
     header{ flex-direction:column; align-items:stretch; padding:14px 16px 12px; }
     .header-actions{ align-items:stretch; }
     .control-bar{ padding:10px 16px; }
