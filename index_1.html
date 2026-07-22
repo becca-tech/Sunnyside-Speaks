@@ -102,6 +102,13 @@
   .chip.active .count{ background:rgba(255,255,255,.28); color:#fff; }
   .chip.active .dot{ box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.9); }
 
+  .view-toggle{ display:flex; border:1.5px solid var(--line); border-radius:999px; padding:3px; background:var(--paper); flex-shrink:0; }
+  .view-btn{
+    border:none; background:none; cursor:pointer; font-family:inherit;
+    font-size:12.5px; font-weight:700; color:var(--charcoal); padding:6px 14px; border-radius:999px;
+  }
+  .view-btn.active{ background:var(--ink); color:#fff; }
+
   /* ---------- Main layout ---------- */
   .layout{ flex:1; display:flex; min-height:0; }
   #map{ flex:2 1 0; min-width:0; min-height:420px; background:#E8E4DA; }
@@ -128,6 +135,7 @@
   .feed-time{ margin-left:auto; font-size:11px; color:#a49c8d; }
   .feed-role{ font-size:12.5px; color:#6b6357; margin:0; }
   .feed-comment{ font-size:13px; color:var(--charcoal); margin:4px 0 0; line-height:1.4; }
+  .feed-location{ font-size:12px; font-weight:700; color:var(--ink); margin:4px 0 0; }
 
   /* ---------- Footer ---------- */
   footer{
@@ -228,7 +236,13 @@
     Filter the map by topic <span class="faint">— tap a topic to show only those reports, tap again to clear it</span>
     <button class="clear-filters" id="clearFilters" style="display:none;">Clear filters</button>
   </p>
-  <div class="chip-row" id="chipRow"></div>
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap;">
+    <div class="chip-row" id="chipRow"></div>
+    <div class="view-toggle" id="viewToggle">
+      <button class="view-btn active" data-view="pins">Pins</button>
+      <button class="view-btn" data-view="heat">Heat map</button>
+    </div>
+  </div>
 </div>
 
 <div class="layout">
@@ -249,6 +263,7 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -266,6 +281,38 @@
   var catById = {};
   CATEGORIES.forEach(function(c){ catById[c.id] = c; });
 
+  // ----- Street grid for showing an approximate location on each point -----
+  // Computed from confirmed anchor points, not a live geocoder -- this never breaks or needs an API key.
+  var NS_STREETS = {
+    "Federal Blvd": -105.02435, "Eliot St": -105.022925, "Decatur St": -105.0215,
+    "Clay St": -105.020075, "Bryant St": -105.01865, "Alcott St": -105.017225,
+    "Zuni St": -105.0158, "Wyandot St": -105.014375, "Vallejo St": -105.01295,
+    "Umatilla St": -105.011525, "Tejon St": -105.0101, "Shoshone St": -105.008675,
+    "Raritan St": -105.00725, "Quivas St": -105.005825, "Osage St": -105.0044,
+    "Navajo St": -105.002975, "Mariposa St": -105.00155, "Lipan St": -105.000125,
+    "Kalamath St": -104.9987, "Jason St": -104.997275, "Inca St": -104.99585
+  };
+  var EW_AVENUES = {
+    "38": 39.7693, "39": 39.770517, "40": 39.771733, "41": 39.77295,
+    "42": 39.774167, "43": 39.775383, "44": 39.7766, "45": 39.777817,
+    "46": 39.779033, "47": 39.78025, "48": 39.781467
+  };
+
+  function nearestCrossStreets(lat, lng){
+    var bestStreet = null, bestStreetDist = Infinity;
+    for(var name in NS_STREETS){
+      var d = Math.abs(NS_STREETS[name] - lng);
+      if(d < bestStreetDist){ bestStreetDist = d; bestStreet = name; }
+    }
+    var bestAve = null, bestAveDist = Infinity;
+    for(var num in EW_AVENUES){
+      var d2 = Math.abs(EW_AVENUES[num] - lat);
+      if(d2 < bestAveDist){ bestAveDist = d2; bestAve = num; }
+    }
+    if(!bestStreet || !bestAve) return '';
+    return 'Near ' + bestStreet + ' & W ' + bestAve + (bestAve === '1' ? 'st' : (bestAve.slice(-1) === '1' && bestAve !== '11' ? 'st' : bestAve.slice(-1) === '2' && bestAve !== '12' ? 'nd' : bestAve.slice(-1) === '3' && bestAve !== '13' ? 'rd' : 'th')) + ' Ave';
+  }
+
   // ----- Historical survey data (static, geocoded ahead of time) -----
   var CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRk1XS4bHBcc6OPw-m6ZDfIIuPLEfCORAj9CuoQB5l1ca5fhgPdY4ZJt3R_NzIGAefWl-XB87eb7bZh/pub?gid=1336826441&single=true&output=csv';
   var ADDRESS_CACHE = {"1540 w 40th ave.": [39.771702, -105.004731], "1616 w 42nd ave": [39.773927, -105.006727], "1840 w 40th ave. denver, co 80211": [39.7715, -105.008967], "2010 w elk pl": [39.782464, -105.011366], "2030 w 43rd ave": [39.775256, -105.011641], "2535 w 42nd ave denver": [39.774412, -105.018322], "2732 w. 42nd ave.": [39.77393, -105.021403], "3809 tejon st": [39.769488, -105.01131], "3828 tejon st": [39.769826, -105.010978], "3961 inca street": [39.771157, -104.998739], "4030 tejon st": [39.772271, -105.011077], "4036 tejon st denver, co 80211": [39.772508, -105.011014], "4038 tejon st, unit b": [39.772212, -105.011109], "4040 tejon street, unit a": [39.772231, -105.01111], "4112 tejon st": [39.773255, -105.010872], "4114 tejon st": [39.773256, -105.011041], "4209 tejon": [39.77443, -105.011503], "4250 tejon street": [39.775081, -105.010958], "42nd and pecos": [39.7739, -105.0128], "4309 eliot street": [39.775609, -105.023877], "4318 shoshone st": [39.7758, -105.009715], "4339 bryant st": [39.776152, -105.019287], "4349 raritan": [39.776277, -105.009062], "4349 raritan st": [39.776277, -105.009062], "4545 n clay st, 80211": [39.779276, -105.020768], "4687 beach court": [39.781727, -105.018482], "4700/4680 n jason st": [39.7847, -105.0015], "4719 tejon st.denver, co 80211": [39.781824, -105.011362], "4805 perry st, denver": [39.783998, -105.039529], "4959 tejon": [39.786673, -105.01131]};
@@ -279,7 +326,7 @@
   messagingSenderId: "381671433001",
   appId: "1:381671433001:web:283f40a2e4423264180d38",
   measurementId: "G-9C02R9YRSR"
-};
+  };
   var isFirebaseConfigured = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('PASTE_YOUR') === -1;
 
   var db = null;
@@ -292,6 +339,8 @@
   var stickyNotes = [];       // live, from Firestore
   var activeFilters = new Set();
   var markerLayer = null;
+  var heatLayer = null;
+  var currentView = 'pins';
   var isLoading = false;
   var isPlacing = false;
   var pendingLatLng = null;
@@ -362,9 +411,52 @@
 
   function showPlacingBanner(){
     var el = document.getElementById('statusArea');
-    el.innerHTML = '<div class="status-banner placing"><span>\uD83D\uDCCD Tap anywhere on the map to place your sticky note</span>' +
-      '<button class="cancel-place" id="cancelPlaceBtn">Cancel</button></div>';
+    el.innerHTML =
+      '<div class="status-banner placing" style="flex-direction:column;align-items:stretch;gap:8px;">' +
+        '<span style="display:flex;justify-content:space-between;align-items:center;">' +
+          '<span>\uD83D\uDCCD Tap anywhere on the map to place your sticky note</span>' +
+          '<button class="cancel-place" id="cancelPlaceBtn">Cancel</button>' +
+        '</span>' +
+        '<span style="display:flex;gap:8px;">' +
+          '<input type="text" id="addressSearchInput" placeholder="Or search an address to jump there first\u2026" ' +
+            'style="flex:1;border:1.5px solid var(--line);border-radius:8px;padding:7px 10px;font-family:inherit;font-size:13px;">' +
+          '<button class="btn btn-ghost" id="addressSearchBtn" style="background:var(--paper);border:1.5px solid var(--line);">Search</button>' +
+        '</span>' +
+        '<span id="addressSearchStatus" style="font-size:12px;"></span>' +
+      '</div>';
     document.getElementById('cancelPlaceBtn').addEventListener('click', exitPlacingMode);
+    document.getElementById('addressSearchBtn').addEventListener('click', runAddressSearch);
+    document.getElementById('addressSearchInput').addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); runAddressSearch(); }
+    });
+  }
+
+  async function runAddressSearch(){
+    var input = document.getElementById('addressSearchInput');
+    var statusEl = document.getElementById('addressSearchStatus');
+    var query = input.value.trim();
+    if(!query) return;
+    statusEl.textContent = 'Searching\u2026';
+    statusEl.style.color = '#6B4F1D';
+    try{
+      var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query + ' Denver Colorado') +
+                '&lat=39.7748&lon=-105.0110&limit=1';
+      var res = await fetch(url);
+      var data = await res.json();
+      if(data && data.features && data.features.length > 0){
+        var coords = data.features[0].geometry.coordinates; // [lng, lat]
+        map.flyTo([coords[1], coords[0]], 17, { duration: 0.7 });
+        statusEl.textContent = 'Found it \u2014 now tap the map to drop your note.';
+        statusEl.style.color = '#2B6870';
+      }else{
+        statusEl.textContent = 'Couldn\u2019t find that address \u2014 try panning the map manually instead.';
+        statusEl.style.color = '#A23E2E';
+      }
+    }catch(e){
+      console.error('Address search failed', e);
+      statusEl.textContent = 'Search isn\u2019t working right now \u2014 try panning the map manually instead.';
+      statusEl.style.color = '#A23E2E';
+    }
   }
 
   // ---------------- CSV (historical survey) loading ----------------
@@ -430,6 +522,8 @@
       var roleKey = rows.length ? findKey_(rows[0], 'role') : null;
       var condKey = rows.length ? findKey_(rows[0], 'which of the following conditions') : null;
       var tsKey = rows.length ? findKey_(rows[0], 'timestamp') : null;
+      var latKey = rows.length ? findKey_(rows[0], 'geocoded lat') : null;
+      var lngKey = rows.length ? findKey_(rows[0], 'geocoded lng') : null;
 
       var out = [];
       var skipped = 0;
@@ -437,7 +531,14 @@
         var row = rows[i];
         var address = addrKey ? row[addrKey] : '';
         if(!address || !address.trim()) continue;
-        var coords = lookupCoords(address);
+        var coords = null;
+        var sheetLat = latKey ? parseFloat(row[latKey]) : NaN;
+        var sheetLng = lngKey ? parseFloat(row[lngKey]) : NaN;
+        if(!isNaN(sheetLat) && !isNaN(sheetLng)){
+          coords = [sheetLat, sheetLng]; // auto-geocoded by the Apps Script trigger
+        }else{
+          coords = lookupCoords(address); // fallback for older, pre-trigger rows
+        }
         if(!coords){ skipped++; continue; }
         out.push({
           source: 'survey',
@@ -446,6 +547,7 @@
           categories: categorize(condKey ? row[condKey] : ''),
           role: (roleKey ? row[roleKey] : '') || '',
           comment: '',
+          location: address.trim(),
           timestamp: tsKey ? (new Date(row[tsKey]).getTime() || Date.now()) : Date.now()
         });
       }
@@ -489,6 +591,7 @@
             role: '',
             comment: d.comment || '',
             name: d.name || '',
+            location: nearestCrossStreets(d.lat, d.lng),
             timestamp: (d.timestamp && d.timestamp.toMillis) ? d.timestamp.toMillis() : Date.now()
           });
         });
@@ -567,6 +670,13 @@
   }
 
   function renderMarkers(){
+    if(currentView === 'heat'){
+      renderHeatLayer();
+      return;
+    }
+    if(heatLayer){ map.removeLayer(heatLayer); heatLayer = null; }
+    if(!map.hasLayer(markerLayer)) map.addLayer(markerLayer);
+
     markerLayer.clearLayers();
     filteredEntries().forEach(function(s){
       var primary = catById[s.categories[0]] || CATEGORIES[5];
@@ -582,6 +692,7 @@
       }).join('');
       marker.bindPopup(
         '<div class="popup-cats">' + tags + '</div>' +
+        (s.location ? '<div style="font-weight:700;color:var(--ink);margin-bottom:3px;">' + escapeHtml(s.location) + '</div>' : '') +
         (s.comment ? '<div style="margin-bottom:4px;">' + escapeHtml(s.comment) + '</div>' : '') +
         (s.role ? '<div>' + escapeHtml(s.role) + '</div>' : '') +
         (s.name ? '<div><em>\u2014 ' + escapeHtml(s.name) + '</em></div>' : '') +
@@ -589,6 +700,25 @@
       );
     });
   }
+
+  function renderHeatLayer(){
+    if(map.hasLayer(markerLayer)) map.removeLayer(markerLayer);
+    var points = filteredEntries().map(function(s){ return [s.lat, s.lng, 0.6]; });
+    if(heatLayer){
+      heatLayer.setLatLngs(points);
+    }else{
+      heatLayer = L.heatLayer(points, { radius: 30, blur: 25, maxZoom: 18, minOpacity: 0.35 }).addTo(map);
+    }
+  }
+
+  var viewToggle = document.getElementById('viewToggle');
+  viewToggle.addEventListener('click', function(e){
+    var btn = e.target.closest('.view-btn');
+    if(!btn) return;
+    currentView = btn.getAttribute('data-view');
+    viewToggle.querySelectorAll('.view-btn').forEach(function(b){ b.classList.toggle('active', b === btn); });
+    renderMarkers();
+  });
 
   function renderFeed(){
     var feed = document.getElementById('feed');
@@ -618,6 +748,7 @@
           '<span class="feed-source">' + (s.source === 'sticky' ? 'Sticky note' : 'Survey') + '</span>' +
           '<span class="feed-time">' + timeAgo(s.timestamp) + '</span>' +
         '</div>' +
+        (s.location ? '<p class="feed-location">' + escapeHtml(s.location) + '</p>' : '') +
         (s.comment ? '<p class="feed-comment">' + escapeHtml(s.comment) + '</p>' : '') +
         (s.role ? '<p class="feed-role">' + escapeHtml(s.role) + '</p>' : '');
       item.addEventListener('click', function(){
