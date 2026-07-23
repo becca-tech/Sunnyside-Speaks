@@ -1334,16 +1334,93 @@
     'very lots lot some much need needs want wants wanted it its is are be been having have has this that these those '+
     'we our us my park area here there near around').split(' ').reduce(function(o,w){ o[w]=true; return o; }, {});
 
-  function tokenizeForThemes(str){
-    return (str.toLowerCase().match(/[a-z']+/g) || []).filter(function(w){
-      return w.length > 2 && !THEME_STOPWORDS[w];
-    });
+  function normalizeWord(w){
+    if(w.length > 4 && w.slice(-3) === 'ies') return w.slice(0,-3) + 'y';
+    var lastTwo = w.slice(-2);
+    if(w.length > 3 && w.slice(-1) === 's' && lastTwo !== 'ss' && lastTwo !== 'us' && lastTwo !== 'is'){
+      return w.slice(0,-1);
+    }
+    return w;
   }
+
+  function tokenizeForThemes(str){
+    return (str.toLowerCase().match(/[a-z']+/g) || [])
+      .filter(function(w){ return w.length > 2 && !THEME_STOPWORDS[w]; })
+      .map(normalizeWord);
+  }
+
+  var BROAD_CATEGORIES = {
+    'Recreation': ['court','tennis','pickleball','golf','exercise','sport','playground','trail','bike','field','splash','pad','swing','slide'],
+    'Park Amenities': ['shade','trash','can','table','bench','sidewalk','kiosk','gathering','restroom','bathroom','fountain','parking','light'],
+    'Public Art': ['art','mural','sculpture','statue','paint'],
+    'Nature & Landscaping': ['garden','flower','tree','plant','pollinator','landscap','green']
+  };
+  var BROAD_CATEGORY_COLORS = {
+    'Recreation': '#A23E2E', 'Park Amenities': '#B3821E', 'Public Art': '#8B5FA8',
+    'Nature & Landscaping': '#5F7F5C', 'Other': '#5B6670'
+  };
+
+  function classifyBroadCategory(text){
+    var t = (text || '').toLowerCase();
+    var names = Object.keys(BROAD_CATEGORIES);
+    for(var i = 0; i < names.length; i++){
+      var kws = BROAD_CATEGORIES[names[i]];
+      for(var j = 0; j < kws.length; j++){
+        if(t.indexOf(kws[j]) !== -1) return names[i];
+      }
+    }
+    return 'Other';
+  }
+
+  function computeBroadCategories(notes){
+    var counts = {};
+    notes.forEach(function(n){
+      var cat = classifyBroadCategory(n.comment);
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return Object.keys(counts).map(function(cat){
+      return { name: cat, count: counts[cat] };
+    }).sort(function(a,b){ return b.count - a.count; });
+  }
+
+  // Manually verified theme assignments (from Becca's own analysis) for known notes.
+  // Falls back to automatic bigram/unigram detection for anything not listed here,
+  // so future sessions still get themes without needing this list updated.
+  var VERIFIED_THEMES = {
+    "not sure if it's legal, but lisbon has kiosks in parks that serve drinks/snacks and act as meeting points": ['Food kiosk / gathering space'],
+    'disc golf and trash cans!': ['Disc golf', 'Trash cans'],
+    'more trash cans and more shade': ['Trash cans', 'Shade'],
+    'splash pad': ['Splash pad'],
+    'splash pad!': ['Splash pad'],
+    'exercise stations (sit up bench, pull up bars)': ['Exercise stations'],
+    'more picnic tables': ['Picnic tables'],
+    'more art': ['Art'],
+    'pickleball and tennis courts!': ['Pickleball / Tennis courts'],
+    'pickleball courts': ['Pickleball / Tennis courts'],
+    'tennis or pickleball courts': ['Pickleball / Tennis courts'],
+    'sidewalk all the way around the park': ['Sidewalk around park'],
+    'shade': ['Shade'],
+    'pollinator garden': ['Pollinator gardens & flowers'],
+    'more flowers and pollinator gardens': ['Pollinator gardens & flowers']
+  };
 
   function computeThemes(notes){
     var bigramCounts = {};
     var unigramCounts = {};
+    var unmatchedNotes = [];
+
     notes.forEach(function(n){
+      var key = (n.comment || '').trim().toLowerCase();
+      if(VERIFIED_THEMES[key]){
+        VERIFIED_THEMES[key].forEach(function(theme){
+          bigramCounts[theme] = (bigramCounts[theme] || 0) + 1;
+        });
+      }else{
+        unmatchedNotes.push(n);
+      }
+    });
+
+    unmatchedNotes.forEach(function(n){
       var words = tokenizeForThemes(n.comment || '');
       for(var i = 0; i < words.length - 1; i++){
         var bg = words[i] + ' ' + words[i+1];
@@ -1354,11 +1431,11 @@
 
     var bigrams = Object.keys(bigramCounts)
       .map(function(k){ return { term: k, count: bigramCounts[k] }; })
-      .filter(function(t){ return t.count >= 2; })
+      .filter(function(t){ return t.count >= 1; })
       .sort(function(a,b){ return b.count - a.count; });
 
     var coveredWords = {};
-    bigrams.forEach(function(t){ t.term.split(' ').forEach(function(w){ coveredWords[w] = true; }); });
+    bigrams.forEach(function(t){ t.term.toLowerCase().split(' ').forEach(function(w){ coveredWords[w] = true; }); });
 
     var unigrams = Object.keys(unigramCounts)
       .filter(function(w){ return !coveredWords[w]; })
@@ -1366,7 +1443,10 @@
       .filter(function(t){ return t.count >= 2; })
       .sort(function(a,b){ return b.count - a.count; });
 
-    return bigrams.concat(unigrams).sort(function(a,b){ return b.count - a.count; }).slice(0, 10);
+    var allTerms = bigrams.concat(unigrams);
+    var totalMentions = allTerms.reduce(function(sum, t){ return sum + t.count; }, 0);
+    var displayList = allTerms.sort(function(a,b){ return b.count - a.count; }).slice(0, 15);
+    return { list: displayList, totalMentions: totalMentions };
   }
 
   function renderSessionBreakdown(sessionName, notes){
@@ -1393,17 +1473,28 @@
       '</div>';
     }).join('');
 
-    var themes = computeThemes(notes);
+    var themesResult = computeThemes(notes);
+    var themes = themesResult.list;
     var themesHtml = themes.length === 0 ? '<p style="font-size:13px;color:#847c6e;">Not enough repeated wording yet to detect common themes.</p>' :
       themes.map(function(t){
-        return barRow(t.term.charAt(0).toUpperCase() + t.term.slice(1), t.count/total, t.count + ' mention' + (t.count === 1 ? '' : 's'), '#734A64');
+        return barRow(t.term.charAt(0).toUpperCase() + t.term.slice(1), t.count/themesResult.totalMentions, t.count + ' mention' + (t.count === 1 ? '' : 's'), '#734A64');
       }).join('');
+    var themesSubtitle = total + ' sticky note' + (total === 1 ? '' : 's') + ' \u2192 ' + themesResult.totalMentions + ' theme mention' + (themesResult.totalMentions === 1 ? '' : 's') +
+      (themesResult.totalMentions !== total ? ' (some notes touch more than one theme)' : '');
+
+    var broadCats = computeBroadCategories(notes);
+    var broadCatHtml = broadCats.map(function(c){
+      return barRow(c.name, total ? c.count/total : 0, c.count + ' (' + Math.round(c.count/total*100) + '%)', BROAD_CATEGORY_COLORS[c.name] || 'var(--ink)');
+    }).join('');
 
     return '<h3 class="display-font">' + escapeHtml(sessionName) + '</h3>' +
       '<p class="hint">' + total + ' sticky note' + (total === 1 ? '' : 's') + ' from this session.</p>' +
-      '<h4 style="color:var(--ink);font-size:14px;margin:16px 0 10px;">By topic</h4>' +
+      '<h4 style="color:var(--ink);font-size:14px;margin:16px 0 10px;">By category</h4>' +
+      broadCatHtml +
+      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">By topic (raw tags)</h4>' +
       catHtml +
-      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">Common themes (auto-detected)</h4>' +
+      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 4px;">Common themes</h4>' +
+      '<p style="font-size:12px;color:#847c6e;margin:0 0 10px;">' + themesSubtitle + '</p>' +
       themesHtml +
       '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 6px;">All notes</h4>' +
       listHtml;
