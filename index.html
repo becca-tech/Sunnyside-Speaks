@@ -274,10 +274,6 @@
         <button class="view-btn active" data-basemap="street">Map</button>
         <button class="view-btn" data-basemap="satellite">Satellite</button>
       </div>
-      <div class="view-toggle" id="viewToggle">
-        <button class="view-btn active" data-view="pins">Pins</button>
-        <button class="view-btn" data-view="heat">Heat map</button>
-      </div>
     </div>
   </div>
 </div>
@@ -306,7 +302,6 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -387,8 +382,6 @@
   var stickyNotes = [];       // live, from Firestore
   var activeFilters = new Set();
   var markerLayer = null;
-  var heatLayer = null;
-  var currentView = 'pins';
   var isLoading = false;
   var isPlacing = false;
   var pendingLatLng = null;
@@ -871,11 +864,6 @@
   }
 
   function renderMarkers(){
-    if(currentView === 'heat'){
-      renderHeatLayer();
-      return;
-    }
-    if(heatLayer){ map.removeLayer(heatLayer); heatLayer = null; }
     if(!map.hasLayer(markerLayer)) map.addLayer(markerLayer);
 
     markerLayer.clearLayers();
@@ -904,24 +892,6 @@
     });
   }
 
-  function renderHeatLayer(){
-    if(map.hasLayer(markerLayer)) map.removeLayer(markerLayer);
-    var points = filteredEntries().map(function(s){ return [s.lat, s.lng, 0.6]; });
-    if(heatLayer){
-      heatLayer.setLatLngs(points);
-    }else{
-      heatLayer = L.heatLayer(points, { radius: 30, blur: 25, maxZoom: 18, minOpacity: 0.35 }).addTo(map);
-    }
-  }
-
-  var viewToggle = document.getElementById('viewToggle');
-  viewToggle.addEventListener('click', function(e){
-    var btn = e.target.closest('.view-btn');
-    if(!btn) return;
-    currentView = btn.getAttribute('data-view');
-    viewToggle.querySelectorAll('.view-btn').forEach(function(b){ b.classList.toggle('active', b === btn); });
-    renderMarkers();
-  });
 
   var basemapToggle = document.getElementById('basemapToggle');
   basemapToggle.addEventListener('click', function(e){
