@@ -291,6 +291,7 @@
       <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
         <button class="refresh-btn" id="refreshBtn" type="button">Refresh</button>
         <button class="refresh-btn" id="insightsBtn" type="button" style="background:var(--ink);color:#fff;border-color:var(--ink);">\uD83D\uDCCA Survey Insights</button>
+        <button class="refresh-btn" id="sessionBtn" type="button" style="background:#734A64;color:#fff;border-color:#734A64;">\uD83D\uDDFA\uFE0F Session Breakdown</button>
         <button class="refresh-btn" id="downloadBtn" type="button" style="display:none;">Download CSV</button>
         <a class="refresh-btn" id="sheetLinkBtn" href="https://docs.google.com/spreadsheets/d/1TV3OkaYDb4Ux7E94TdxJNrp1xiuqHZa9hZea8oJZnXY/edit?gid=1336826441#gid=1336826441" target="_blank" rel="noopener" style="display:none;text-decoration:none;">Open Sheet</a>
       </div>
@@ -1316,6 +1317,107 @@
   }
 
   document.getElementById('insightsBtn').addEventListener('click', openInsightsModal);
+
+  // ---------------- Session Breakdown panel ----------------
+  function computeSessionGroups(){
+    var groups = {};
+    stickyNotes.forEach(function(n){
+      var session = (n.session || '').trim();
+      if(!session) return;
+      if(!groups[session]) groups[session] = [];
+      groups[session].push(n);
+    });
+    return groups;
+  }
+
+  function renderSessionBreakdown(sessionName, notes){
+    var catCounts = {};
+    CATEGORIES.forEach(function(c){ catCounts[c.id] = 0; });
+    notes.forEach(function(n){
+      n.categories.forEach(function(cid){ catCounts[cid] = (catCounts[cid] || 0) + 1; });
+    });
+    var total = notes.length;
+
+    var catHtml = CATEGORIES.filter(function(c){ return catCounts[c.id] > 0; })
+      .sort(function(a,b){ return catCounts[b.id] - catCounts[a.id]; })
+      .map(function(c){
+        return barRow(c.label, total ? catCounts[c.id]/total : 0, catCounts[c.id] + ' (' + Math.round(catCounts[c.id]/total*100) + '%)', c.color);
+      }).join('');
+
+    var sorted = notes.slice().sort(function(a,b){ return b.timestamp - a.timestamp; });
+    var listHtml = sorted.map(function(n){
+      var c = catById[n.categories[0]] || CATEGORIES[5];
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--line);">' +
+        '<span class="popup-tag" style="background:' + c.color + ';margin-right:6px;">' + c.label + '</span>' +
+        (n.location ? '<span style="font-size:11px;color:#847c6e;">' + escapeHtml(n.location) + '</span>' : '') +
+        '<div style="margin-top:3px;">' + escapeHtml(n.comment) + (n.name ? ' <em style="color:#a49c8d;">\u2014 ' + escapeHtml(n.name) + '</em>' : '') + '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<h3 class="display-font">' + escapeHtml(sessionName) + '</h3>' +
+      '<p class="hint">' + total + ' sticky note' + (total === 1 ? '' : 's') + ' from this session.</p>' +
+      '<h4 style="color:var(--ink);font-size:14px;margin:16px 0 10px;">By topic</h4>' +
+      catHtml +
+      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 6px;">All notes</h4>' +
+      listHtml;
+  }
+
+  function openSessionModal(){
+    var groups = computeSessionGroups();
+    var sessionNames = Object.keys(groups);
+    var scrim = document.createElement('div');
+    scrim.className = 'scrim';
+
+    function showSession(name){
+      scrim.querySelector('.modal').innerHTML =
+        (sessionNames.length > 1 ? '<button class="btn btn-ghost" id="backToSessionsBtn" style="padding:4px 0;margin-bottom:6px;">\u2190 All sessions</button>' : '') +
+        renderSessionBreakdown(name, groups[name]) +
+        '<div class="modal-actions" style="margin-top:8px;"><button class="btn btn-primary" id="closeSessionBtn">Close</button></div>';
+      scrim.querySelector('#closeSessionBtn').addEventListener('click', closeSession);
+      if(sessionNames.length > 1){
+        scrim.querySelector('#backToSessionsBtn').addEventListener('click', showPicker);
+      }
+    }
+
+    function showPicker(){
+      var pickerHtml = sessionNames.map(function(name){
+        return '<div class="session-pick" data-session="' + escapeHtml(name) + '" style="padding:12px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px;cursor:pointer;">' +
+          '<div style="font-weight:700;color:var(--ink);">' + escapeHtml(name) + '</div>' +
+          '<div style="font-size:12.5px;color:#847c6e;">' + groups[name].length + ' sticky note' + (groups[name].length === 1 ? '' : 's') + '</div>' +
+        '</div>';
+      }).join('');
+      scrim.querySelector('.modal').innerHTML =
+        '<h3 class="display-font">Engagement Sessions</h3>' +
+        '<p class="hint">Pick a session to see its breakdown.</p>' +
+        pickerHtml +
+        '<div class="modal-actions" style="margin-top:4px;"><button class="btn btn-ghost" id="closeSessionBtn">Close</button></div>';
+      scrim.querySelector('#closeSessionBtn').addEventListener('click', closeSession);
+      scrim.querySelectorAll('.session-pick').forEach(function(el){
+        el.addEventListener('click', function(){ showSession(el.getAttribute('data-session')); });
+      });
+    }
+
+    function closeSession(){ document.body.removeChild(scrim); }
+
+    if(sessionNames.length === 0){
+      scrim.innerHTML = '<div class="modal"><h3 class="display-font">Engagement Sessions</h3>' +
+        '<p class="hint">No sticky notes have been tagged with a session yet.</p>' +
+        '<div class="modal-actions"><button class="btn btn-primary" id="closeSessionBtn">Close</button></div></div>';
+      document.body.appendChild(scrim);
+      scrim.querySelector('#closeSessionBtn').addEventListener('click', closeSession);
+      scrim.addEventListener('click', function(e){ if(e.target === scrim) closeSession(); });
+      return;
+    }
+
+    scrim.innerHTML = '<div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;border-top-color:#734A64;"></div>';
+    document.body.appendChild(scrim);
+    scrim.addEventListener('click', function(e){ if(e.target === scrim) closeSession(); });
+
+    if(sessionNames.length === 1) showSession(sessionNames[0]);
+    else showPicker();
+  }
+
+  document.getElementById('sessionBtn').addEventListener('click', openSessionModal);
 
 
   var EXPORT_SECRET = 'OuRZgwZ37xsdcTzqG9yn';
