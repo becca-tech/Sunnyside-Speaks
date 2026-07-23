@@ -290,7 +290,7 @@
       <p id="feedSubcount">Loading responses…</p>
       <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
         <button class="refresh-btn" id="refreshBtn" type="button">Refresh</button>
-        <button class="refresh-btn" id="insightsBtn" type="button" style="background:var(--ink);color:#fff;border-color:var(--ink);">\uD83D\uDCCA Survey Insights</button>
+        <button class="refresh-btn" id="insightsBtn" type="button" style="background:var(--ink);color:#fff;border-color:var(--ink);">Survey Insights</button>
         <button class="refresh-btn" id="sessionBtn" type="button" style="background:#734A64;color:#fff;border-color:#734A64;">\uD83D\uDDFA\uFE0F Session Breakdown</button>
         <button class="refresh-btn" id="downloadBtn" type="button" style="display:none;">Download CSV</button>
         <a class="refresh-btn" id="sheetLinkBtn" href="https://docs.google.com/spreadsheets/d/1TV3OkaYDb4Ux7E94TdxJNrp1xiuqHZa9hZea8oJZnXY/edit?gid=1336826441#gid=1336826441" target="_blank" rel="noopener" style="display:none;text-decoration:none;">Open Sheet</a>
@@ -984,10 +984,27 @@
     return div.innerHTML;
   }
 
+  var SESSION_BUTTON_LABEL_OVERRIDES = {
+    'chaffee park cleanup 7/22': '7/22 Chaffee Park Cleanup Engagement Session Insights'
+  };
+
+  function updateSessionButtonLabel(){
+    var groups = computeSessionGroups();
+    var names = Object.keys(groups);
+    var btn = document.getElementById('sessionBtn');
+    if(names.length === 1){
+      var key = names[0].trim().toLowerCase();
+      btn.innerHTML = escapeHtml(SESSION_BUTTON_LABEL_OVERRIDES[key] || sessionDisplayTitle(names[0]));
+    }else{
+      btn.innerHTML = 'Session Breakdown';
+    }
+  }
+
   function renderAll(){
     renderChips();
     renderMarkers();
     renderFeed();
+    updateSessionButtonLabel();
   }
 
   document.getElementById('clearFilters').addEventListener('click', function(){
@@ -1449,29 +1466,16 @@
     return { list: displayList, totalMentions: totalMentions };
   }
 
+  var SESSION_TITLE_OVERRIDES = {
+    'chaffee park cleanup 7/22': '7/22 Chaffee Park Cleanup Insights'
+  };
+  function sessionDisplayTitle(sessionName){
+    var override = SESSION_TITLE_OVERRIDES[sessionName.trim().toLowerCase()];
+    return override || (sessionName + ' Insights');
+  }
+
   function renderSessionBreakdown(sessionName, notes){
-    var catCounts = {};
-    CATEGORIES.forEach(function(c){ catCounts[c.id] = 0; });
-    notes.forEach(function(n){
-      n.categories.forEach(function(cid){ catCounts[cid] = (catCounts[cid] || 0) + 1; });
-    });
     var total = notes.length;
-
-    var catHtml = CATEGORIES.filter(function(c){ return catCounts[c.id] > 0; })
-      .sort(function(a,b){ return catCounts[b.id] - catCounts[a.id]; })
-      .map(function(c){
-        return barRow(c.label, total ? catCounts[c.id]/total : 0, catCounts[c.id] + ' (' + Math.round(catCounts[c.id]/total*100) + '%)', c.color);
-      }).join('');
-
-    var sorted = notes.slice().sort(function(a,b){ return b.timestamp - a.timestamp; });
-    var listHtml = sorted.map(function(n){
-      var c = catById[n.categories[0]] || CATEGORIES[5];
-      return '<div style="padding:8px 0;border-bottom:1px solid var(--line);">' +
-        '<span class="popup-tag" style="background:' + c.color + ';margin-right:6px;">' + c.label + '</span>' +
-        (n.location ? '<span style="font-size:11px;color:#847c6e;">' + escapeHtml(n.location) + '</span>' : '') +
-        '<div style="margin-top:3px;">' + escapeHtml(n.comment) + (n.name ? ' <em style="color:#a49c8d;">\u2014 ' + escapeHtml(n.name) + '</em>' : '') + '</div>' +
-      '</div>';
-    }).join('');
 
     var themesResult = computeThemes(notes);
     var themes = themesResult.list;
@@ -1479,25 +1483,18 @@
       themes.map(function(t){
         return barRow(t.term.charAt(0).toUpperCase() + t.term.slice(1), t.count/themesResult.totalMentions, t.count + ' mention' + (t.count === 1 ? '' : 's'), '#734A64');
       }).join('');
-    var themesSubtitle = total + ' sticky note' + (total === 1 ? '' : 's') + ' \u2192 ' + themesResult.totalMentions + ' theme mention' + (themesResult.totalMentions === 1 ? '' : 's') +
-      (themesResult.totalMentions !== total ? ' (some notes touch more than one theme)' : '');
 
     var broadCats = computeBroadCategories(notes);
     var broadCatHtml = broadCats.map(function(c){
       return barRow(c.name, total ? c.count/total : 0, c.count + ' (' + Math.round(c.count/total*100) + '%)', BROAD_CATEGORY_COLORS[c.name] || 'var(--ink)');
     }).join('');
 
-    return '<h3 class="display-font">' + escapeHtml(sessionName) + '</h3>' +
+    return '<h3 class="display-font">' + escapeHtml(sessionDisplayTitle(sessionName)) + '</h3>' +
       '<p class="hint">' + total + ' sticky note' + (total === 1 ? '' : 's') + ' from this session.</p>' +
       '<h4 style="color:var(--ink);font-size:14px;margin:16px 0 10px;">By category</h4>' +
       broadCatHtml +
-      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">By topic (raw tags)</h4>' +
-      catHtml +
-      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 4px;">Common themes</h4>' +
-      '<p style="font-size:12px;color:#847c6e;margin:0 0 10px;">' + themesSubtitle + '</p>' +
-      themesHtml +
-      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 6px;">All notes</h4>' +
-      listHtml;
+      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">Common themes</h4>' +
+      themesHtml;
   }
 
   function openSessionModal(){
