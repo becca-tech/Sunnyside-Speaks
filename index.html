@@ -708,13 +708,10 @@
         });
       }
       surveyResponses = out;
-      if(!isFirebaseConfigured){
-        showStatus(skipped > 0 ? (skipped + ' response(s) need a fresh address refresh — let Claude know.') : '', skipped > 0 ? 'error' : null);
-      }else if(skipped > 0){
-        showStatus(skipped + ' older survey response(s) need an address refresh — let Claude know.', 'error');
-      }else{
-        showStatus('');
+      if(skipped > 0){
+        console.warn(skipped + ' survey response(s) still need address geocoding.');
       }
+      showStatus('');
     }catch(e){
       console.error('Could not load survey data', e);
       showStatus('Couldn\u2019t reach the survey sheet right now. Try Refresh in a moment.', 'error');
