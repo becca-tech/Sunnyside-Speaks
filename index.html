@@ -1330,6 +1330,45 @@
     return groups;
   }
 
+  var THEME_STOPWORDS = ('a an the and or of to for in on at with more please would could should like also just really '+
+    'very lots lot some much need needs want wants wanted it its is are be been having have has this that these those '+
+    'we our us my park area here there near around').split(' ').reduce(function(o,w){ o[w]=true; return o; }, {});
+
+  function tokenizeForThemes(str){
+    return (str.toLowerCase().match(/[a-z']+/g) || []).filter(function(w){
+      return w.length > 2 && !THEME_STOPWORDS[w];
+    });
+  }
+
+  function computeThemes(notes){
+    var bigramCounts = {};
+    var unigramCounts = {};
+    notes.forEach(function(n){
+      var words = tokenizeForThemes(n.comment || '');
+      for(var i = 0; i < words.length - 1; i++){
+        var bg = words[i] + ' ' + words[i+1];
+        bigramCounts[bg] = (bigramCounts[bg] || 0) + 1;
+      }
+      words.forEach(function(w){ unigramCounts[w] = (unigramCounts[w] || 0) + 1; });
+    });
+
+    var bigrams = Object.keys(bigramCounts)
+      .map(function(k){ return { term: k, count: bigramCounts[k] }; })
+      .filter(function(t){ return t.count >= 2; })
+      .sort(function(a,b){ return b.count - a.count; });
+
+    var coveredWords = {};
+    bigrams.forEach(function(t){ t.term.split(' ').forEach(function(w){ coveredWords[w] = true; }); });
+
+    var unigrams = Object.keys(unigramCounts)
+      .filter(function(w){ return !coveredWords[w]; })
+      .map(function(w){ return { term: w, count: unigramCounts[w] }; })
+      .filter(function(t){ return t.count >= 2; })
+      .sort(function(a,b){ return b.count - a.count; });
+
+    return bigrams.concat(unigrams).sort(function(a,b){ return b.count - a.count; }).slice(0, 10);
+  }
+
   function renderSessionBreakdown(sessionName, notes){
     var catCounts = {};
     CATEGORIES.forEach(function(c){ catCounts[c.id] = 0; });
@@ -1354,10 +1393,18 @@
       '</div>';
     }).join('');
 
+    var themes = computeThemes(notes);
+    var themesHtml = themes.length === 0 ? '<p style="font-size:13px;color:#847c6e;">Not enough repeated wording yet to detect common themes.</p>' :
+      themes.map(function(t){
+        return barRow(t.term.charAt(0).toUpperCase() + t.term.slice(1), t.count/total, t.count + ' mention' + (t.count === 1 ? '' : 's'), '#734A64');
+      }).join('');
+
     return '<h3 class="display-font">' + escapeHtml(sessionName) + '</h3>' +
       '<p class="hint">' + total + ' sticky note' + (total === 1 ? '' : 's') + ' from this session.</p>' +
       '<h4 style="color:var(--ink);font-size:14px;margin:16px 0 10px;">By topic</h4>' +
       catHtml +
+      '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 10px;">Common themes (auto-detected)</h4>' +
+      themesHtml +
       '<h4 style="color:var(--ink);font-size:14px;margin:18px 0 6px;">All notes</h4>' +
       listHtml;
   }
