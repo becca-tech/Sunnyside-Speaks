@@ -534,6 +534,14 @@
     return null;
   }
 
+  function findKeyAny_(row, needles){
+    for(var i=0;i<needles.length;i++){
+      var found = findKey_(row, needles[i]);
+      if(found) return found;
+    }
+    return null;
+  }
+
   function categorize(conditionsText){
     var text = (conditionsText || '').toLowerCase();
     var cats = [];
@@ -653,7 +661,7 @@
 
       var addrKey = rows.length ? findKey_(rows[0], 'property address') : null;
       var roleKey = rows.length ? findKey_(rows[0], 'role') : null;
-      var condKey = rows.length ? findKey_(rows[0], 'which of the following conditions') : null;
+      var condKey = rows.length ? findKeyAny_(rows[0], ['which of the following conditions', 'infrastructure issues would you like to see addressed']) : null;
       var tsKey = rows.length ? findKey_(rows[0], 'timestamp') : null;
       var latKey = rows.length ? findKey_(rows[0], 'geocoded lat') : null;
       var lngKey = rows.length ? findKey_(rows[0], 'geocoded lng') : null;
